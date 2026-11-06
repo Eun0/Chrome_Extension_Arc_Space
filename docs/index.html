@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arc Space 기능 안내</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 왼쪽 설명 · 오른쪽 사이드패널 캡처를 번갈아 놓는 기능 카탈로그. 색은 아이콘의 하늘색·코랄·남색에서 가져옴 */
+:root {
+  --bg: #eef3fb;
+  --paper: #ffffff;
+  --ink: #16193a;
+  --muted: #5b6283;
+  --line: #d6deee;
+  --coral: #e94c63;
+  --blue: #2549c9;
+  --chip: #e2eaf8;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12142a; --paper: #1b1e38; --ink: #e8ebf7; --muted: #a0a7c6; --line: #2d3254;
+    --coral: #ff7a8c; --blue: #8aa4ff; --chip: #262a4a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.7 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.3; }
+p { margin: 0; max-width: 62ch; }
+a { color: var(--blue); }
+code, kbd { font-family: var(--font-mono); font-size: .86em; background: var(--chip); padding: 1px 6px; border-radius: 5px; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
+
+/* 헤더 */
+.hero { padding-block: 64px 40px; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+.mark { display: flex; align-items: center; gap: 14px; }
+.mark img { width: 56px; height: 56px; }
+.mark span { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
+.hero h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 700; letter-spacing: -0.02em; margin-top: 22px; }
+.hero h1 em { font-style: normal; color: var(--coral); }
+.hero p { color: var(--muted); font-size: 18px; margin-top: 14px; }
+.hero .shot { width: 300px; }
+@media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero .shot { width: min(300px, 100%); } }
+
+/* 목차 */
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px; padding-block: 8px 48px; border-bottom: 1px solid var(--line); }
+nav.toc a { text-decoration: none; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 5px 12px; border-radius: 999px; font-size: 14px; }
+nav.toc a:hover { border-color: var(--blue); color: var(--blue); }
+
+/* 설치 */
+.install { padding-block: 56px; display: grid; grid-template-columns: 220px 1fr; gap: 32px; border-bottom: 1px solid var(--line); }
+.install ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 14px; counter-reset: s; }
+.install li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 10px; }
+.install li::before { content: counter(s); font-family: var(--font-mono); font-weight: 500; color: var(--coral); }
+@media (max-width: 760px) { .install { grid-template-columns: 1fr; } }
+
+/* 기능 섹션 */
+.feature { padding-block: 56px; display: grid; grid-template-columns: 1fr 340px; gap: 48px; align-items: start; border-bottom: 1px solid var(--line); }
+.feature:nth-of-type(even) { grid-template-columns: 340px 1fr; }
+.feature:nth-of-type(even) .text { order: 2; }
+@media (max-width: 860px) {
+  .feature, .feature:nth-of-type(even) { grid-template-columns: 1fr; }
+  .feature:nth-of-type(even) .text { order: 0; }
+}
+.text { display: flex; flex-direction: column; gap: 14px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--coral); }
+.feature h2, .install h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+.text ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 62ch; }
+.text li::marker { color: var(--coral); }
+.note { font-size: 14px; color: var(--muted); }
+
+.shots { display: grid; gap: 16px; }
+.shots.pair { grid-template-columns: 1fr 1fr; }
+.feature.wide { grid-template-columns: 1fr 520px; }
+.feature.wide:nth-of-type(even) { grid-template-columns: 520px 1fr; }
+@media (max-width: 1000px) { .feature.wide, .feature.wide:nth-of-type(even) { grid-template-columns: 1fr; } .feature.wide:nth-of-type(even) .text { order: 0; } }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.shot { display: block; width: 100%; max-width: 340px; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(22, 25, 58, .12); background: var(--paper); }
+figcaption { font-size: 13px; color: var(--muted); }
+
+/* 구성 다이어그램 */
+.anatomy { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.anatomy li { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+.anatomy b { font-weight: 500; }
+.anatomy span { color: var(--muted); font-size: 15px; }
+@media (max-width: 480px) { .anatomy li { grid-template-columns: 1fr; gap: 2px; } }
+
+table { border-collapse: collapse; width: 100%; font-size: 15px; background: var(--paper); border-radius: 10px; overflow: hidden; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <div class="mark"><img src="images/logo.png" alt=""><span>CHROME EXTENSION · MV3</span></div>
+    <h1>크롬에서 쓰는 <em>Arc 사이드바</em></h1>
+    <p>세로 탭, 스페이스 전환, 24시간 지난 탭 자동 정리까지. Arc를 쓰던 방식 그대로 크롬 사이드패널에서 쓸 수 있게 만든 개인용 확장입니다.</p>
+  </div>
+  <img class="shot" src="images/overview.png" alt="Arc Space 사이드패널 전체 화면">
+</header>
+
+<nav class="toc" aria-label="목차">
+  <a href="#install">설치</a>
+  <a href="#layout">화면 구성</a>
+  <a href="#spaces">스페이스</a>
+  <a href="#pins">즐겨찾기와 고정</a>
+  <a href="#drag">드래그</a>
+  <a href="#split">분할 화면</a>
+  <a href="#archive">자동 정리</a>
+  <a href="#player">미니 플레이어</a>
+  <a href="#icons">아이콘 꾸미기</a>
+  <a href="#settings">설정과 단축키</a>
+  <a href="#limits">한계</a>
+</nav>
+
+<section class="install" id="install">
+  <h2>설치</h2>
+  <ol>
+    <li><span>저장소를 내려받습니다. <code>git clone https://github.com/Eun0/Chrome_Extension_Arc_Space.git</code></span></li>
+    <li><span>크롬 주소창에 <code>chrome://extensions</code>를 열고 오른쪽 위 <b>개발자 모드</b>를 켭니다.</span></li>
+    <li><span><b>압축해제된 확장 프로그램을 로드합니다</b>를 누르고 내려받은 폴더를 고릅니다.</span></li>
+    <li><span>툴바의 Arc Space 아이콘이나 <kbd>⌘</kbd> <kbd>B</kbd>로 사이드패널을 엽니다. Arc처럼 왼쪽에 두려면 <code>chrome://settings/appearance</code>에서 사이드 패널을 <b>왼쪽에 표시</b>로 바꿉니다.</span></li>
+    <li><span class="note">Chrome 121 이상에서 동작합니다. 분할 화면은 Chrome 155, 사이드패널 닫기 단축키는 Chrome 141 이상이 필요합니다.</span></li>
+  </ol>
+</section>
+
+<section class="feature" id="layout">
+  <div class="text">
+    <div class="eyebrow">Layout</div>
+    <h2>화면 구성</h2>
+    <p>위에서 아래로 Arc와 같은 순서입니다.</p>
+    <ul class="anatomy">
+      <li><b>공통 즐겨찾기</b><span>맨 위 아이콘 그리드. 모든 스페이스에서 똑같이 보입니다.</span></li>
+      <li><b>스페이스 이름</b><span>지금 스페이스. 더블클릭하거나 <code>⋯</code>을 누르면 편집합니다.</span></li>
+      <li><b>스페이스 고정</b><span>이름과 가로선 사이. 이 스페이스에만 있고, 닫아도 남으며 자동 정리되지 않습니다.</span></li>
+      <li><b>일반 탭</b><span>가로선 아래. 24시간 동안 안 보면 자동으로 정리됩니다.</span></li>
+      <li><b>재생바</b><span>음악·영상 탭을 보고 있지 않을 때 나타납니다.</span></li>
+      <li><b>하단 독</b><span>아카이브 · 스페이스 아이콘 · 설정.</span></li>
+    </ul>
+  </div>
+  <figure>
+    <img class="shot" src="images/overview-dark.png" alt="다크 모드 사이드패널">
+    <figcaption>다크 모드에서도 같은 구성입니다. 배경은 지금 스페이스 색으로 살짝 물듭니다.</figcaption>
+  </figure>
+</section>
+
+<section class="feature wide" id="spaces">
+  <div class="text">
+    <div class="eyebrow">Spaces</div>
+    <h2>스페이스 전환</h2>
+    <p>창 하나 안에서 업무·개인·공부처럼 탭 묶음을 바꿔 씁니다. 바꾸면 지금 탭들은 저장되고 닫히며, 고른 스페이스의 탭이 열립니다. 크롬 위쪽 탭 바에는 지금 스페이스의 탭만 보입니다.</p>
+    <ul>
+      <li>하단 독의 스페이스 아이콘을 클릭해서 전환합니다.</li>
+      <li>사이드패널 위에서 가로 스크롤(MX Master 사이드 휠, 트랙패드 좌우 스와이프)로 이전·다음 스페이스로 넘어갑니다.</li>
+      <li>단축키 <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>←</kbd> / <kbd>→</kbd>로도 넘어갑니다.</li>
+      <li>전환할 때 바로 볼 탭 하나만 로드하고, 나머지는 클릭할 때 로드해서 빠릅니다.</li>
+      <li>아이콘끼리 끌어서 순서를 바꾸고, 우클릭으로 이름·이모지·색을 편집합니다.</li>
+    </ul>
+  </div>
+  <div class="shots pair">
+    <figure><img class="shot" src="images/space2.png" alt="개인 스페이스로 전환한 모습"><figcaption>개인 스페이스로 바꾸면 탭 목록과 배경색이 함께 바뀝니다.</figcaption></figure>
+    <figure><img class="shot" src="images/space-editor.png" alt="스페이스 편집 시트"><figcaption>편집 시트 왼쪽 위에서 독에 보일 아이콘을 미리 봅니다.</figcaption></figure>
+  </div>
+</section>
+
+<section class="feature wide" id="pins">
+  <div class="text">
+    <div class="eyebrow">Favorites &amp; Pins</div>
+    <h2>즐겨찾기와 스페이스 고정</h2>
+    <p>Arc처럼 두 단계로 고정합니다. 둘 다 탭을 닫아도 항목이 남고, 다시 클릭하면 열립니다.</p>
+    <ul>
+      <li><b>공통 즐겨찾기</b>: 열면 크롬 고정 탭으로 떠서 스페이스를 바꿔도 남습니다.</li>
+      <li><b>스페이스 고정</b>: 다른 페이지로 이동하면 제목 앞에 <code>/</code>가 붙습니다. 우클릭으로 원래 주소로 돌아가거나 지금 주소로 바꿉니다.</li>
+      <li>탭을 우클릭해서 <b>이 스페이스에 고정</b> 또는 <b>즐겨찾기에 추가</b>를 고르거나, 끌어다 놓아서 추가합니다.</li>
+    </ul>
+  </div>
+  <div class="shots pair">
+    <figure><img class="shot" src="images/menu.png" alt="일반 탭 우클릭 메뉴"><figcaption>일반 탭 우클릭: 고정, 즐겨찾기 추가, 다른 스페이스로 이동.</figcaption></figure>
+    <figure><img class="shot" src="images/pin-menu.png" alt="고정 탭 우클릭 메뉴"><figcaption>고정 탭 우클릭: 탭만 닫기, 아이콘 바꾸기, 고정 해제.</figcaption></figure>
+  </div>
+</section>
+
+<section class="feature" id="drag">
+  <div class="text">
+    <div class="eyebrow">Drag &amp; Drop</div>
+    <h2>끌어서 정리하기</h2>
+    <p>놓는 자리에 따라 동작이 달라집니다. 끄는 동안 놓을 수 있는 곳에 스페이스 색 선이 생깁니다.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>끄는 것</th><th>놓는 곳</th><th>결과</th></tr></thead>
+      <tbody>
+        <tr><td>일반 탭</td><td>맨 위 아이콘 영역</td><td>공통 즐겨찾기에 추가</td></tr>
+        <tr><td>일반 탭</td><td>스페이스 이름, 가로선 근처</td><td>이 스페이스에 고정</td></tr>
+        <tr><td>일반 탭</td><td>하단 스페이스 아이콘</td><td>그 스페이스로 이동</td></tr>
+        <tr><td>즐겨찾기 · 고정</td><td>가로선 아래</td><td>일반 탭으로 되돌림</td></tr>
+        <tr><td>고정 ↔ 즐겨찾기</td><td>서로의 영역</td><td>종류만 바뀌고 탭은 유지</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <figure>
+    <img class="shot" src="images/drag.png" alt="탭을 가로선 위로 끄는 모습">
+    <figcaption>탭을 끄는 동안 가로선 주변이 넓어져서 놓기 쉬워집니다.</figcaption>
+  </figure>
+</section>
+
+<section class="feature" id="split">
+  <div class="text">
+    <div class="eyebrow">Split View</div>
+    <h2>분할 화면</h2>
+    <p>탭을 다른 탭 줄의 <b>가운데</b>에 놓으면 두 탭을 한 화면에 나란히 띄웁니다. 줄의 위·아래 <b>가장자리</b>에 놓으면 순서만 바뀝니다.</p>
+    <ul>
+      <li>분할된 두 탭은 사이드패널에서 한 줄에 반씩 보입니다.</li>
+      <li>우클릭으로 분할 해제, 둘 다 닫기를 할 수 있습니다.</li>
+      <li>스페이스를 바꿨다 돌아와도 분할 상태가 복원됩니다.</li>
+    </ul>
+    <p class="note">크롬 기본 Split View 기능을 쓰며 Chrome 155 이상이 필요합니다.</p>
+  </div>
+  <figure>
+    <img class="shot" src="images/split.png" alt="분할 화면 줄과 분할 대상 강조">
+    <figcaption>위: 분할된 두 탭. 아래: 가운데에 놓으려는 탭이 테두리로 강조됩니다.</figcaption>
+  </figure>
+</section>
+
+<section class="feature" id="archive">
+  <div class="text">
+    <div class="eyebrow">Auto Archive</div>
+    <h2>24시간 지난 탭 자동 정리</h2>
+    <p>마지막으로 본 지 24시간이 지난 일반 탭을 닫고 아카이브로 옮깁니다. 10분마다 확인합니다.</p>
+    <ul>
+      <li>즐겨찾기, 스페이스 고정, 지금 보는 탭, 소리 나는 탭은 닫지 않습니다.</li>
+      <li>지금 쓰지 않는 스페이스에 저장된 탭도 같은 기준으로 정리됩니다.</li>
+      <li>아카이브는 날짜별로 묶이고 검색할 수 있으며, 클릭하면 다시 열립니다.</li>
+      <li>기준 시간은 설정에서 끄기, 6시간, 12시간, 24시간, 3일, 7일 중에서 고릅니다.</li>
+    </ul>
+  </div>
+  <figure>
+    <img class="shot" src="images/archive.png" alt="아카이브 화면">
+    <figcaption>점 색은 원래 있던 스페이스입니다.</figcaption>
+  </figure>
+</section>
+
+<section class="feature" id="player">
+  <div class="text">
+    <div class="eyebrow">Mini Player</div>
+    <h2>미니 플레이어</h2>
+    <p>음악·영상이 나오던 탭에서 다른 탭으로 넘어가면 하단에 재생바가 생깁니다. 마우스를 올리면 위로 펼쳐지며 재생 중인 제목이 보입니다.</p>
+    <ul>
+      <li>이전 · 재생/일시정지 · 다음, 음소거를 지원합니다.</li>
+      <li>사이트가 브라우저에 등록한 미디어 동작(키보드 미디어 키와 같은 경로)을 불러서, 숨은 탭에서도 바로 넘어갑니다.</li>
+      <li>사이트별로 처음 누를 때 접근 허용을 한 번 묻습니다. 설치 후 음악 탭을 한 번 새로고침하면 가장 잘 동작합니다.</li>
+    </ul>
+  </div>
+  <figure>
+    <img class="shot" src="images/player.png" alt="마우스를 올려 펼친 재생바">
+    <figcaption>마우스를 올리면 제목 줄이 펼쳐집니다.</figcaption>
+  </figure>
+</section>
+
+<section class="feature" id="icons">
+  <div class="text">
+    <div class="eyebrow">Custom Icons</div>
+    <h2>아이콘 꾸미기</h2>
+    <p>즐겨찾기와 스페이스 고정의 아이콘을 바꿀 수 있습니다. 우클릭해서 <b>아이콘 바꾸기</b>를 누르세요.</p>
+    <ul>
+      <li><b>색 블록</b>: 배경색 위에 글자 1~2자. 배경색과 글자색은 고르거나 직접 지정합니다.</li>
+      <li><b>이모지</b>: 이모지나 글자 하나.</li>
+      <li><b>이미지</b>: 파일을 고르면 64×64로 잘라 저장합니다.</li>
+      <li><b>기본</b>: 사이트 파비콘으로 되돌립니다.</li>
+    </ul>
+  </div>
+  <figure>
+    <img class="shot" src="images/icon-editor.png" alt="아이콘 바꾸기 시트의 색 블록 탭">
+    <figcaption>색 블록으로 만든 보라색 L 아이콘.</figcaption>
+  </figure>
+</section>
+
+<section class="feature" id="settings">
+  <div class="text">
+    <div class="eyebrow">Settings</div>
+    <h2>설정과 단축키</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>동작</th><th>방법</th></tr></thead>
+      <tbody>
+        <tr><td>사이드패널 열기 · 닫기</td><td><kbd>⌘</kbd> <kbd>B</kbd></td></tr>
+        <tr><td>이전 · 다음 스페이스</td><td><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>←</kbd> / <kbd>→</kbd>, 가로 스크롤</td></tr>
+        <tr><td>탭 닫기</td><td>× 버튼, 휠 클릭</td></tr>
+        <tr><td>메뉴 · 편집 닫기</td><td><kbd>Esc</kbd></td></tr>
+        <tr><td>단축키 바꾸기</td><td><code>chrome://extensions/shortcuts</code></td></tr>
+      </tbody>
+    </table></div>
+    <p class="note"><kbd>⌘</kbd> <kbd>B</kbd>를 쓰면 Google Docs·Notion 같은 웹페이지의 굵게 단축키가 막힙니다. 불편하면 위 페이지에서 다른 키로 바꾸세요.</p>
+  </div>
+  <figure>
+    <img class="shot" src="images/settings.png" alt="설정 화면">
+  </figure>
+</section>
+
+<section class="feature" id="limits">
+  <div class="text">
+    <div class="eyebrow">Limits</div>
+    <h2>크롬이라서 생기는 한계</h2>
+    <ul>
+      <li>크롬 위쪽 가로 탭 바는 확장으로 숨길 수 없습니다.</li>
+      <li>사이드패널의 최소 폭은 크롬이 정해서 더 좁게 줄일 수 없습니다.</li>
+      <li>스페이스를 바꾸면 탭을 새로 열기 때문에 스크롤 위치와 입력 중인 내용은 유지되지 않습니다.</li>
+      <li>창 하나 기준으로 설계했습니다. 창이 여러 개면 스페이스 전환은 사이드패널이 열린 창에만 적용됩니다.</li>
+      <li>가로 스크롤 전환은 마우스가 사이드패널 위에 있을 때만 동작합니다.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  화면은 실제 사이드패널 코드에 예시 탭 데이터를 넣어 찍었습니다. 다시 찍으려면 <code>zsh docs/capture/capture.sh</code>.
+  · <a href="https://github.com/Eun0/Chrome_Extension_Arc_Space">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>
