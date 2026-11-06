@@ -104,6 +104,13 @@
       onAttached: ev(), onDetached: ev(), onReplaced: ev(),
     },
     permissions: { request: async () => true },
+    commands: {
+      getAll: async () => [
+        { name: 'toggle-panel', shortcut: '⌘B' },
+        { name: 'prev-space', shortcut: '⌥⇧←' },
+        { name: 'next-space', shortcut: '⌥⇧→' },
+      ],
+    },
     scripting: { executeScript: async () => [{ result: 'session' }] },
   };
 })();

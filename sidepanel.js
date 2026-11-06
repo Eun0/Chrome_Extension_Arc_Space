@@ -739,41 +739,54 @@ async function sweepNow() {
   render();
 }
 
+// 크롬에 실제로 지정된 단축키 (chrome://extensions/shortcuts 에서 바꾼 값)
+function loadCommands() {
+  chrome.commands?.getAll?.().then((list) => { S.commands = list; render(); }).catch(() => {});
+}
+const SHORTCUT_ROWS = [
+  ['toggle-panel', '사이드패널 열기 · 닫기'],
+  ['prev-space', '이전 스페이스'],
+  ['next-space', '다음 스페이스'],
+];
+const HOUR_LABELS = { 0: '끄기', 6: '6시간', 12: '12시간', 24: '24시간', 72: '3일', 168: '7일' };
+
 function renderSettings() {
+  if (!S.commands) loadCommands();
+  const hours = Number(S.settings.archiveHours) || 0;
+  const keyOf = (name) => S.commands?.find((c) => c.name === name)?.shortcut || '';
+  const keys = (str) => str
+    // macOS 는 "⌥⇧→" 처럼 기호가 붙어서, Windows 는 "Ctrl+B" 처럼 + 로 이어서 온다
+    ? h('span', { class: 'keys' }, (str.includes('+') ? str.split('+') : [...str]).map((k) => h('kbd', {}, k)))
+    : h('span', { class: 'nokey' }, '지정 안 됨');
+
   return h('main', { class: 'main' },
     h('header', { class: 'space-head' },
       h('button', { class: 'icon-btn', title: '탭 목록으로', onclick: () => { S.view = 'tabs'; render(); } }, icon('back')),
       h('span', { class: 'space-name' }, '설정'),
     ),
     h('div', { class: 'settings' },
-      h('div', { class: 'field' },
-        h('label', { for: 'set-hours' }, '안 본 탭 자동 정리'),
-        h('select', {
-          id: 'set-hours',
-          onchange: (e) => send('setSettings', { patch: { archiveHours: Number(e.target.value) } }),
-        }, HOURS.map(([v, label]) => {
-          const o = h('option', { value: String(v) }, label);
-          if (Number(S.settings.archiveHours) === v) o.selected = true;
-          return o;
-        })),
-        h('p', { class: 'hint' }, '가로선 아래 일반 탭 중 마지막으로 본 뒤 이 시간이 지난 탭을 닫고 아카이브로 옮겨요. 10분마다 확인합니다. 공통 즐겨찾기, 스페이스 즐겨찾기, 지금 보고 있는 탭, 소리가 나는 탭은 닫지 않아요.'),
+      h('section', { class: 'set-group' },
+        h('h3', { class: 'set-title' }, '안 본 탭 자동 정리'),
+        h('p', { class: 'set-desc' },
+          hours ? `가로선 아래 일반 탭 중 ${HOUR_LABELS[hours] || hours + '시간'} 동안 안 본 탭을 아카이브로 옮겨요.` : '자동 정리가 꺼져 있어요.'),
+        h('div', { class: 'seg-row', role: 'radiogroup', 'aria-label': '정리 기준 시간' },
+          HOURS.map(([v]) => h('button', {
+            class: 'seg-opt' + (hours === v ? ' on' : ''), role: 'radio', 'aria-checked': String(hours === v),
+            onclick: () => { S.sweepMsg = null; send('setSettings', { patch: { archiveHours: v } }); },
+          }, HOUR_LABELS[v]))),
+        h('p', { class: 'set-note' }, '즐겨찾기, 지금 보는 탭, 소리 나는 탭은 닫지 않아요.'),
         h('div', { class: 'sweep-row' },
-          h('button', { class: 'btn', onclick: sweepNow }, '지금 정리하기'),
-          S.sweepMsg ? h('span', { class: 'hint' }, S.sweepMsg) : null,
+          h('button', { class: 'btn-tint', onclick: sweepNow, disabled: !hours }, '지금 정리하기'),
+          S.sweepMsg ? h('span', { class: 'set-note' }, S.sweepMsg) : null,
         ),
       ),
-      h('div', { class: 'field' },
-        h('label', {}, '공통 즐겨찾기와 스페이스 즐겨찾기'),
-        h('p', { class: 'hint' }, '맨 위 아이콘은 모든 스페이스에서 보이는 공통 즐겨찾기, 스페이스 이름 아래 가로선 위는 그 스페이스에서만 보이는 스페이스 즐겨찾기예요. 탭을 끌어다 놓거나 우클릭 메뉴로 추가하고, 가로선 아래로 끌어내리면 일반 탭이 됩니다. 탭을 닫아도 항목은 남아요.'),
-      ),
-      h('div', { class: 'field' },
-        h('label', {}, '스페이스'),
-        h('p', { class: 'hint' }, '하단 아이콘을 클릭하면 전환, 우클릭하면 편집이에요. 아이콘끼리 끌어서 순서를 바꾸고, 탭을 아이콘 위로 끌어다 놓으면 그 스페이스로 옮겨집니다.'),
-      ),
-      h('div', { class: 'field' },
-        h('label', {}, '단축키'),
-        h('p', { class: 'hint' }, '사이드바 열기/닫기 ⌘B · 이전/다음 스페이스 ⌥⇧← / ⌥⇧→'),
-        h('button', { class: 'btn', onclick: () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }) }, '단축키 바꾸기'),
+      h('section', { class: 'set-group' },
+        h('h3', { class: 'set-title' }, '단축키'),
+        h('ul', { class: 'key-list' },
+          SHORTCUT_ROWS.map(([name, label]) => h('li', {}, h('span', {}, label), keys(keyOf(name)))),
+          h('li', {}, h('span', {}, '스페이스 넘기기'), h('span', { class: 'nokey' }, '사이드패널 위에서 가로 스크롤')),
+        ),
+        h('button', { class: 'btn-tint', onclick: () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }) }, '단축키 바꾸기'),
       ),
     ),
   );
