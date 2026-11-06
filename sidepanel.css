@@ -212,6 +212,7 @@ body.dragging-tab .pins.fav-empty {
   padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit;
 }
 .hint { color: var(--muted); font-size: 12px; margin: 0; line-height: 1.5; }
+.sweep-row { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .btn {
   padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); cursor: pointer;
   align-self: flex-start;

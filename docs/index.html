@@ -37,15 +37,16 @@ body {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.wrap { max-width: 1040px; margin: 0 auto; }
+.wrap { max-width: 1040px; }
 h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.3; }
 p { margin: 0; max-width: 62ch; }
 a { color: var(--blue); }
+code { overflow-wrap: anywhere; }
 code, kbd { font-family: var(--font-mono); font-size: .86em; background: var(--chip); padding: 1px 6px; border-radius: 5px; }
 kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
 
 /* 헤더 */
-.hero { padding-block: 64px 40px; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+.hero { padding-block: 64px 48px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
 .mark { display: flex; align-items: center; gap: 14px; }
 .mark img { width: 56px; height: 56px; }
 .mark span { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
@@ -55,10 +56,44 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
 .hero .shot { width: 300px; }
 @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero .shot { width: min(300px, 100%); } }
 
-/* 목차 */
-nav.toc { display: flex; flex-wrap: wrap; gap: 8px; padding-block: 8px 48px; border-bottom: 1px solid var(--line); }
-nav.toc a { text-decoration: none; color: var(--ink); background: var(--paper); border: 1px solid var(--line); padding: 5px 12px; border-radius: 999px; font-size: 14px; }
-nav.toc a:hover { border-color: var(--blue); color: var(--blue); }
+/* 목차: 확장 사이드패널처럼 생긴 세로 목차 (좁은 화면에선 글자 링크 가로 줄) */
+.layout {
+  display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 56px;
+  max-width: 1320px; margin: 0 auto;
+}
+.layout > main { min-width: 0; }
+nav.toc {
+  position: sticky; top: 24px; align-self: start; margin-top: 64px;
+  display: flex; flex-direction: column; gap: 1px; padding: 14px 8px 10px;
+  border-radius: 16px; background: color-mix(in oklab, var(--blue) 13%, var(--bg));
+}
+.toc-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 12px; font-weight: 700; font-size: 14px; }
+.toc-head img { width: 20px; height: 20px; }
+nav.toc a {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px;
+  color: var(--ink); text-decoration: none; font-size: 14px;
+}
+nav.toc a::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: color-mix(in oklab, var(--blue) 45%, transparent);
+}
+nav.toc a:hover { background: color-mix(in oklab, var(--blue) 9%, transparent); }
+nav.toc a.on { background: color-mix(in oklab, var(--paper) 75%, transparent); box-shadow: 0 1px 2px rgba(22, 25, 58, .10); }
+nav.toc a.on::before { background: var(--coral); }
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: 1fr; gap: 0; }
+  nav.toc {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin: 0;
+    flex-direction: row; gap: 18px; overflow-x: auto; padding: 0;
+    border-radius: 0; background: var(--bg); border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .toc-head { display: none; }
+  nav.toc a { padding: 12px 0; border-radius: 0; white-space: nowrap; border-bottom: 2px solid transparent; }
+  nav.toc a::before { display: none; }
+  nav.toc a:hover { background: none; color: var(--blue); }
+  nav.toc a.on { background: none; box-shadow: none; border-bottom-color: var(--coral); }
+}
 
 /* 설치 */
 .install { padding-block: 56px; display: grid; grid-template-columns: 220px 1fr; gap: 32px; border-bottom: 1px solid var(--line); }
@@ -92,9 +127,21 @@ figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 figcaption { font-size: 13px; color: var(--muted); }
 
 /* 구성 다이어그램 */
-.anatomy { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.anatomy li { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
-.anatomy b { font-weight: 500; }
+.anatomy { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--line); }
+.anatomy li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.anatomy b { font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.num {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: var(--coral); color: #fff; font: 600 11px/1 var(--font-mono);
+}
+/* 화면 구성 그림: 캡처 위에 영역 박스 (좌표는 340×760 캡처 기준 %) */
+.annot { position: relative; width: 100%; max-width: 340px; }
+.annot .shot { max-width: none; }
+.box {
+  position: absolute; border: 2px solid var(--coral); border-radius: 10px;
+  background: color-mix(in oklab, var(--coral) 8%, transparent);
+}
+.box .num { position: absolute; top: -10px; right: -10px; box-shadow: 0 0 0 2px var(--paper); }
 .anatomy span { color: var(--muted); font-size: 15px; }
 @media (max-width: 480px) { .anatomy li { grid-template-columns: 1fr; gap: 2px; } }
 
@@ -104,11 +151,31 @@ th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--li
 tr:last-child td { border-bottom: 0; }
 th { font-size: 13px; color: var(--muted); font-weight: 500; }
 
+.dragsec { padding-block: 56px; display: flex; flex-direction: column; gap: 28px; border-bottom: 1px solid var(--line); }
+.gifs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.gifs figcaption { font-size: 14px; color: var(--muted); line-height: 1.5; }
+.gifs figcaption b { color: var(--ink); font-weight: 500; }
+
 footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="layout">
+<nav class="toc" aria-label="목차">
+  <div class="toc-head"><img src="images/logo.png" alt="">Arc Space</div>
+  <a href="#install">설치</a>
+  <a href="#layout">화면 구성</a>
+  <a href="#spaces">스페이스</a>
+  <a href="#pins">즐겨찾기</a>
+  <a href="#drag">드래그</a>
+  <a href="#split">분할 화면</a>
+  <a href="#archive">자동 정리</a>
+  <a href="#player">미니 플레이어</a>
+  <a href="#icons">아이콘 꾸미기</a>
+  <a href="#settings">설정과 단축키</a>
+  <a href="#limits">한계</a>
+</nav>
+<main class="wrap">
 
 <header class="hero">
   <div>
@@ -119,19 +186,7 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
   <img class="shot" src="images/overview.png" alt="Arc Space 사이드패널 전체 화면">
 </header>
 
-<nav class="toc" aria-label="목차">
-  <a href="#install">설치</a>
-  <a href="#layout">화면 구성</a>
-  <a href="#spaces">스페이스</a>
-  <a href="#pins">즐겨찾기와 고정</a>
-  <a href="#drag">드래그</a>
-  <a href="#split">분할 화면</a>
-  <a href="#archive">자동 정리</a>
-  <a href="#player">미니 플레이어</a>
-  <a href="#icons">아이콘 꾸미기</a>
-  <a href="#settings">설정과 단축키</a>
-  <a href="#limits">한계</a>
-</nav>
+
 
 <section class="install" id="install">
   <h2>설치</h2>
@@ -150,17 +205,25 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
     <h2>화면 구성</h2>
     <p>위에서 아래로 Arc와 같은 순서입니다.</p>
     <ul class="anatomy">
-      <li><b>공통 즐겨찾기</b><span>맨 위 아이콘 그리드. 모든 스페이스에서 똑같이 보입니다.</span></li>
-      <li><b>스페이스 이름</b><span>지금 스페이스. 더블클릭하거나 <code>⋯</code>을 누르면 편집합니다.</span></li>
-      <li><b>스페이스 고정</b><span>이름과 가로선 사이. 이 스페이스에만 있고, 닫아도 남으며 자동 정리되지 않습니다.</span></li>
-      <li><b>일반 탭</b><span>가로선 아래. 24시간 동안 안 보면 자동으로 정리됩니다.</span></li>
-      <li><b>재생바</b><span>음악·영상 탭을 보고 있지 않을 때 나타납니다.</span></li>
-      <li><b>하단 독</b><span>아카이브 · 스페이스 아이콘 · 설정.</span></li>
+      <li><b><span class="num">1</span>공통 즐겨찾기</b><span>맨 위 아이콘. 모든 스페이스에서 똑같이 보입니다.</span></li>
+      <li><b><span class="num">2</span>스페이스 이름</b><span>지금 스페이스. 더블클릭하거나 <code>⋯</code>을 누르면 편집합니다.</span></li>
+      <li><b><span class="num">3</span>스페이스 즐겨찾기</b><span>이름과 가로선 사이. 이 스페이스에서만 보이고, 닫아도 남으며 자동 정리되지 않습니다.</span></li>
+      <li><b><span class="num">4</span>일반 탭</b><span>가로선 아래. 24시간 동안 안 보면 자동으로 정리됩니다.</span></li>
+      <li><b><span class="num">5</span>재생바</b><span>음악·영상 탭을 보고 있지 않을 때 나타납니다.</span></li>
+      <li><b><span class="num">6</span>하단 독</b><span>아카이브 · 스페이스 아이콘 · 설정.</span></li>
     </ul>
   </div>
   <figure>
-    <img class="shot" src="images/overview-dark.png" alt="다크 모드 사이드패널">
-    <figcaption>다크 모드에서도 같은 구성입니다. 배경은 지금 스페이스 색으로 살짝 물듭니다.</figcaption>
+    <div class="annot">
+      <img class="shot" src="images/overview.png" alt="사이드패널 영역 구분">
+      <div class="box" style="left:1.76%;top:1.05%;width:96.47%;height:12.89%"><span class="num">1</span></div>
+      <div class="box" style="left:1.76%;top:14.34%;width:96.47%;height:4.87%"><span class="num">2</span></div>
+      <div class="box" style="left:1.76%;top:19.34%;width:96.47%;height:14.47%"><span class="num">3</span></div>
+      <div class="box" style="left:1.76%;top:36.18%;width:96.47%;height:34.21%"><span class="num">4</span></div>
+      <div class="box" style="left:1.76%;top:87.76%;width:96.47%;height:5.53%"><span class="num">5</span></div>
+      <div class="box" style="left:1.18%;top:93.82%;width:97.65%;height:5.79%"><span class="num">6</span></div>
+    </div>
+    <figcaption>번호는 왼쪽 목록과 같습니다. 배경은 지금 스페이스 색으로 살짝 물듭니다.</figcaption>
   </figure>
 </section>
 
@@ -186,40 +249,33 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
 <section class="feature wide" id="pins">
   <div class="text">
     <div class="eyebrow">Favorites &amp; Pins</div>
-    <h2>즐겨찾기와 스페이스 고정</h2>
-    <p>Arc처럼 두 단계로 고정합니다. 둘 다 탭을 닫아도 항목이 남고, 다시 클릭하면 열립니다.</p>
+    <h2>공통 즐겨찾기와 스페이스 즐겨찾기</h2>
+    <p>Arc처럼 즐겨찾기가 두 종류입니다. 둘 다 탭을 닫아도 항목이 남고, 다시 클릭하면 열리며, 자동 정리되지 않습니다.</p>
     <ul>
-      <li><b>공통 즐겨찾기</b>: 열면 크롬 고정 탭으로 떠서 스페이스를 바꿔도 남습니다.</li>
-      <li><b>스페이스 고정</b>: 다른 페이지로 이동하면 제목 앞에 <code>/</code>가 붙습니다. 우클릭으로 원래 주소로 돌아가거나 지금 주소로 바꿉니다.</li>
-      <li>탭을 우클릭해서 <b>이 스페이스에 고정</b> 또는 <b>즐겨찾기에 추가</b>를 고르거나, 끌어다 놓아서 추가합니다.</li>
+      <li><b>공통 즐겨찾기</b>: 맨 위 아이콘. 모든 스페이스에서 보입니다. 열면 크롬 고정 탭으로 떠서 스페이스를 바꿔도 남습니다.</li>
+      <li><b>스페이스 즐겨찾기</b>: 스페이스 이름 아래, 가로선 위. 그 스페이스에서만 보입니다. 다른 페이지로 이동하면 제목 앞에 <code>/</code>가 붙고, 우클릭으로 원래 주소로 돌아가거나 지금 주소로 바꿉니다.</li>
+      <li>탭을 우클릭해서 <b>스페이스 즐겨찾기에 추가</b> 또는 <b>공통 즐겨찾기에 추가</b>를 고르거나, <a href="#drag">끌어다 놓아서</a> 추가합니다.</li>
     </ul>
   </div>
   <div class="shots pair">
-    <figure><img class="shot" src="images/menu.png" alt="일반 탭 우클릭 메뉴"><figcaption>일반 탭 우클릭: 고정, 즐겨찾기 추가, 다른 스페이스로 이동.</figcaption></figure>
-    <figure><img class="shot" src="images/pin-menu.png" alt="고정 탭 우클릭 메뉴"><figcaption>고정 탭 우클릭: 탭만 닫기, 아이콘 바꾸기, 고정 해제.</figcaption></figure>
+    <figure><img class="shot" src="images/menu.png" alt="일반 탭 우클릭 메뉴"><figcaption>일반 탭 우클릭: 즐겨찾기 추가, 다른 스페이스로 이동.</figcaption></figure>
+    <figure><img class="shot" src="images/pin-menu.png" alt="스페이스 즐겨찾기 우클릭 메뉴"><figcaption>스페이스 즐겨찾기 우클릭: 탭만 닫기, 아이콘 바꾸기, 즐겨찾기에서 제거.</figcaption></figure>
   </div>
 </section>
 
-<section class="feature" id="drag">
+<section class="dragsec" id="drag">
   <div class="text">
     <div class="eyebrow">Drag &amp; Drop</div>
     <h2>끌어서 정리하기</h2>
     <p>놓는 자리에 따라 동작이 달라집니다. 끄는 동안 놓을 수 있는 곳에 스페이스 색 선이 생깁니다.</p>
-    <div class="tbl"><table>
-      <thead><tr><th>끄는 것</th><th>놓는 곳</th><th>결과</th></tr></thead>
-      <tbody>
-        <tr><td>일반 탭</td><td>맨 위 아이콘 영역</td><td>공통 즐겨찾기에 추가</td></tr>
-        <tr><td>일반 탭</td><td>스페이스 이름, 가로선 근처</td><td>이 스페이스에 고정</td></tr>
-        <tr><td>일반 탭</td><td>하단 스페이스 아이콘</td><td>그 스페이스로 이동</td></tr>
-        <tr><td>즐겨찾기 · 고정</td><td>가로선 아래</td><td>일반 탭으로 되돌림</td></tr>
-        <tr><td>고정 ↔ 즐겨찾기</td><td>서로의 영역</td><td>종류만 바뀌고 탭은 유지</td></tr>
-      </tbody>
-    </table></div>
   </div>
-  <figure>
-    <img class="shot" src="images/drag.png" alt="탭을 가로선 위로 끄는 모습">
-    <figcaption>탭을 끄는 동안 가로선 주변이 넓어져서 놓기 쉬워집니다.</figcaption>
-  </figure>
+  <div class="gifs">
+    <figure><img class="shot" src="images/drag-pin.gif" alt="일반 탭을 가로선 위로 끌어 스페이스 즐겨찾기에 추가"><figcaption><b>일반 탭 → 가로선 위</b><br>스페이스 즐겨찾기에 추가</figcaption></figure>
+    <figure><img class="shot" src="images/drag-fav.gif" alt="일반 탭을 맨 위 아이콘 영역으로 끌어 공통 즐겨찾기에 추가"><figcaption><b>일반 탭 → 맨 위 아이콘 영역</b><br>공통 즐겨찾기에 추가</figcaption></figure>
+    <figure><img class="shot" src="images/drag-unpin.gif" alt="스페이스 즐겨찾기를 가로선 아래로 끌어 일반 탭으로"><figcaption><b>즐겨찾기 → 가로선 아래</b><br>일반 탭으로 되돌림 (탭은 열린 채로)</figcaption></figure>
+    <figure><img class="shot" src="images/drag-move.gif" alt="탭을 하단 스페이스 아이콘으로 끌어 다른 스페이스로 이동"><figcaption><b>일반 탭 → 하단 스페이스 아이콘</b><br>그 스페이스로 이동</figcaption></figure>
+  </div>
+  <p class="note">공통 즐겨찾기 아이콘과 스페이스 즐겨찾기도 서로의 영역으로 끌면 종류만 바뀌고 탭은 그대로 유지됩니다. 탭끼리는 줄의 위·아래 가장자리에 놓으면 순서가 바뀝니다.</p>
 </section>
 
 <section class="feature" id="split">
@@ -235,8 +291,8 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
     <p class="note">크롬 기본 Split View 기능을 쓰며 Chrome 155 이상이 필요합니다.</p>
   </div>
   <figure>
-    <img class="shot" src="images/split.png" alt="분할 화면 줄과 분할 대상 강조">
-    <figcaption>위: 분할된 두 탭. 아래: 가운데에 놓으려는 탭이 테두리로 강조됩니다.</figcaption>
+    <img class="shot" src="images/drag-split.gif" alt="탭을 다른 탭 가운데에 놓아 분할 화면 만들기">
+    <figcaption>가운데에 놓으면 대상 탭이 테두리로 강조되고, 놓으면 두 탭이 한 줄로 합쳐집니다.</figcaption>
   </figure>
 </section>
 
@@ -246,7 +302,8 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
     <h2>24시간 지난 탭 자동 정리</h2>
     <p>마지막으로 본 지 24시간이 지난 일반 탭을 닫고 아카이브로 옮깁니다. 10분마다 확인합니다.</p>
     <ul>
-      <li>즐겨찾기, 스페이스 고정, 지금 보는 탭, 소리 나는 탭은 닫지 않습니다.</li>
+      <li>공통 즐겨찾기, 스페이스 즐겨찾기, 지금 보는 탭, 소리 나는 탭은 닫지 않습니다.</li>
+      <li>설정의 <b>지금 정리하기</b>를 누르면 바로 정리하고, 정리할 탭이 없으면 가장 오래 안 본 탭이 몇 시간 전인지 알려 줍니다.</li>
       <li>지금 쓰지 않는 스페이스에 저장된 탭도 같은 기준으로 정리됩니다.</li>
       <li>아카이브는 날짜별로 묶이고 검색할 수 있으며, 클릭하면 다시 열립니다.</li>
       <li>기준 시간은 설정에서 끄기, 6시간, 12시간, 24시간, 3일, 7일 중에서 고릅니다.</li>
@@ -279,7 +336,7 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
   <div class="text">
     <div class="eyebrow">Custom Icons</div>
     <h2>아이콘 꾸미기</h2>
-    <p>즐겨찾기와 스페이스 고정의 아이콘을 바꿀 수 있습니다. 우클릭해서 <b>아이콘 바꾸기</b>를 누르세요.</p>
+    <p>공통 즐겨찾기와 스페이스 즐겨찾기의 아이콘을 바꿀 수 있습니다. 우클릭해서 <b>아이콘 바꾸기</b>를 누르세요.</p>
     <ul>
       <li><b>색 블록</b>: 배경색 위에 글자 1~2자. 배경색과 글자색은 고르거나 직접 지정합니다.</li>
       <li><b>이모지</b>: 이모지나 글자 하나.</li>
@@ -333,6 +390,24 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
   · <a href="https://github.com/Eun0/Chrome_Extension_Arc_Space">GitHub</a>
 </footer>
 
+</main>
 </div>
+<script>
+// 지금 보고 있는 섹션을 목차에 표시
+(() => {
+  const links = new Map([...document.querySelectorAll('nav.toc a')].map((a) => [a.getAttribute('href').slice(1), a]));
+  const mark = (id) => {
+    links.forEach((a, key) => a.classList.toggle('on', key === id));
+    const a = links.get(id);
+    if (a && getComputedStyle(a.parentElement).flexDirection === 'row') a.scrollIntoView({ block: 'nearest', inline: 'center' });
+  };
+  const io = new IntersectionObserver((entries) => {
+    const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+    if (vis[0]) mark(vis[0].target.id);
+  }, { rootMargin: '-20% 0px -65% 0px' });
+  links.forEach((_, id) => { const el = document.getElementById(id); if (el) io.observe(el); });
+  mark('install');
+})();
+</script>
 </body>
 </html>

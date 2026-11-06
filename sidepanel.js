@@ -91,7 +91,7 @@ function dropTarget(accept, onDrop) {
 
 const ICONS = {
   archive: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.8" y="2.5" width="12.4" height="3.2" rx="1"/><path d="M3 5.7v6.8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.7M6.3 8.6h3.4" stroke-linecap="round"/></svg>',
-  gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.6M8 12.8v1.6M14.4 8h-1.6M3.2 8H1.6M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1M12.5 12.5l-1.1-1.1M4.6 4.6 3.5 3.5" stroke-linecap="round"/></svg>',
+  gear: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M6.7 1.6h2.6l.4 1.7c.4.1.8.3 1.1.6l1.7-.5 1.3 2.2-1.3 1.2a4 4 0 0 1 0 1.4l1.3 1.2-1.3 2.2-1.7-.5c-.3.3-.7.5-1.1.6l-.4 1.7H6.7l-.4-1.7c-.4-.1-.8-.3-1.1-.6l-1.7.5-1.3-2.2 1.3-1.2a4 4 0 0 1 0-1.4L2.2 5.6l1.3-2.2 1.7.5c.3-.3.7-.5 1.1-.6z"/><circle cx="8" cy="8" r="2"/></svg>',
   back: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3 5 8l5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   more: '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
 };
@@ -194,7 +194,7 @@ function renderTabs(sp) {
       h('span', { class: 'space-name' }, sp?.name || ''),
       h('button', { class: 'icon-btn', title: '스페이스 편집', onclick: () => openEditor(sp) }, icon('more')),
     ),
-    pins.length ? h('ul', { class: 'tabs' }, pins.map((p, i) => pinRow(p, i, byId.get(p.tabId)))) : null,
+    pins.length ? h('ul', { class: 'tabs pin-list' }, pins.map((p, i) => pinRow(p, i, byId.get(p.tabId)))) : null,
     // 가로선: 위는 스페이스 즐겨찾기(정리 안 됨), 아래는 일반 탭(자동 정리 대상)
     h('div', {
       class: 'divider-zone', title: '여기로 끌어 놓으면 스페이스 즐겨찾기 맨 끝에 추가',
@@ -213,7 +213,7 @@ function renderTabs(sp) {
       class: 'newtab', onclick: () => chrome.tabs.create({ windowId: S.windowId }),
       ...dropTarget((e) => hasType(e, 'text/x-pin'), (e) => unpinToRegular(dragPin(e))),
     }, h('span', { class: 'plus' }, '+'), '새 탭'),
-    h('ul', { class: 'tabs' }, groupSplits(normal).map((g) => (g.length === 2 ? splitRow(g[0], g[1]) : tabRow(g[0])))),
+    h('ul', { class: 'tabs tab-list' }, groupSplits(normal).map((g) => (g.length === 2 ? splitRow(g[0], g[1]) : tabRow(g[0])))),
     normal.length ? null : h('p', { class: 'empty' }, '열린 탭이 없어요.'),
     // 목록 아래 빈 공간: 즐겨찾기를 끌어 놓으면 일반 탭으로
     h('div', { class: 'tail', ...dropTarget((e) => hasType(e, 'text/x-pin'), (e) => unpinToRegular(dragPin(e))) }),
@@ -276,14 +276,14 @@ function favTile(f, i, tab) {
 
 function strayTile(t) {
   return h('button', {
-    class: 'pin open' + (t.active ? ' active' : ''), title: `${t.title || t.url}\n(크롬 고정 탭 · 우클릭해서 즐겨찾기에 추가)`,
+    class: 'pin open' + (t.active ? ' active' : ''), title: `${t.title || t.url}\n(크롬 고정 탭 · 우클릭해서 공통 즐겨찾기에 추가)`,
     draggable: 'true',
     onclick: () => chrome.tabs.update(t.id, { active: true }),
     ondragstart: (e) => e.dataTransfer.setData('text/x-tab', String(t.id)),
     oncontextmenu: (e) => {
       e.preventDefault();
       openMenu(e, [
-        { label: '즐겨찾기에 추가 (모든 스페이스)', run: () => send('addPin', { kind: 'fav', tabId: t.id }) },
+        { label: '공통 즐겨찾기에 추가', run: () => send('addPin', { kind: 'fav', tabId: t.id }) },
         { label: '고정 해제', run: () => chrome.tabs.update(t.id, { pinned: false }) },
         'sep',
         { label: '닫기', run: () => chrome.tabs.remove(t.id) },
@@ -335,7 +335,7 @@ function pinMenuItems(kind, p, tab) {
     (tab || navigated) && 'sep',
     { label: '아이콘 바꾸기', run: () => openIconEditor(kind, p) },
     'sep',
-    { label: kind === 'fav' ? '즐겨찾기에서 제거' : '스페이스 고정 해제', run: () => send('removePin', { kind, pinId: p.id }) },
+    { label: kind === 'fav' ? '공통 즐겨찾기에서 제거' : '스페이스 즐겨찾기에서 제거', run: () => send('removePin', { kind, pinId: p.id }) },
   ];
 }
 
@@ -461,8 +461,8 @@ function splitRow(a, b) {
 function tabMenuItems(t) {
   const others = S.spaces.filter((s) => s.id !== S.activeSpaceId);
   return [
-    { label: '이 스페이스에 고정', run: () => send('addPin', { kind: 'pin', tabId: t.id }) },
-    { label: '즐겨찾기에 추가 (모든 스페이스)', run: () => send('addPin', { kind: 'fav', tabId: t.id }) },
+    { label: '스페이스 즐겨찾기에 추가', run: () => send('addPin', { kind: 'pin', tabId: t.id }) },
+    { label: '공통 즐겨찾기에 추가', run: () => send('addPin', { kind: 'fav', tabId: t.id }) },
     { label: '복제', run: () => chrome.tabs.duplicate(t.id) },
     inSplit(t) && { label: '분할 해제', run: () => chrome.tabs.unsplit(t.splitViewId) },
     others.length && 'sep',
@@ -622,7 +622,7 @@ function renderDock() {
     ),
     h('button', {
       class: 'icon-btn' + (S.view === 'settings' ? ' on' : ''), title: '설정',
-      onclick: () => { S.view = S.view === 'settings' ? 'tabs' : 'settings'; render(); },
+      onclick: () => { S.view = S.view === 'settings' ? 'tabs' : 'settings'; S.sweepMsg = null; render(); },
     }, icon('gear')),
   );
 }
@@ -715,6 +715,30 @@ function renderArchive() {
 }
 
 // ---------- 설정 ----------
+// 지금 정리하기: 몇 개를 정리했는지, 없으면 가장 오래 안 본 일반 탭이 몇 시간 전인지 알려 준다
+async function sweepNow() {
+  const hours = Number(S.settings.archiveHours) || 0;
+  if (!hours) { S.sweepMsg = '자동 정리가 꺼져 있어요.'; render(); return; }
+  const res = await send('sweepNow');
+  const n = res?.result || 0;
+  if (n) {
+    S.sweepMsg = `탭 ${n}개를 아카이브로 옮겼어요.`;
+  } else {
+    const { overrides = {} } = await chrome.storage.session.get('overrides');
+    const keep = new Set([...S.favorites, ...(activeSpace()?.pins || [])].map((p) => p.tabId));
+    const ages = S.tabs
+      .filter((t) => !t.pinned && !t.active && !t.audible && !keep.has(t.id))
+      .map((t) => overrides[t.id] ?? t.lastAccessed)
+      .filter((x) => typeof x === 'number');
+    if (!ages.length) S.sweepMsg = '정리할 일반 탭이 없어요.';
+    else {
+      const h = Math.floor((Date.now() - Math.min(...ages)) / 3600000);
+      S.sweepMsg = `${hours}시간 넘게 안 본 탭이 없어요. 가장 오래된 탭은 ${h < 1 ? '1시간 안' : h + '시간'} 전에 봤어요.`;
+    }
+  }
+  render();
+}
+
 function renderSettings() {
   return h('main', { class: 'main' },
     h('header', { class: 'space-head' },
@@ -732,12 +756,15 @@ function renderSettings() {
           if (Number(S.settings.archiveHours) === v) o.selected = true;
           return o;
         })),
-        h('p', { class: 'hint' }, '가로선 아래 일반 탭 중 마지막으로 본 뒤 이 시간이 지난 탭을 닫고 아카이브로 옮겨요. 10분마다 확인합니다. 즐겨찾기, 스페이스 고정 탭, 지금 보고 있는 탭, 소리가 나는 탭은 닫지 않아요.'),
-        h('button', { class: 'btn', onclick: () => send('sweepNow') }, '지금 정리하기'),
+        h('p', { class: 'hint' }, '가로선 아래 일반 탭 중 마지막으로 본 뒤 이 시간이 지난 탭을 닫고 아카이브로 옮겨요. 10분마다 확인합니다. 공통 즐겨찾기, 스페이스 즐겨찾기, 지금 보고 있는 탭, 소리가 나는 탭은 닫지 않아요.'),
+        h('div', { class: 'sweep-row' },
+          h('button', { class: 'btn', onclick: sweepNow }, '지금 정리하기'),
+          S.sweepMsg ? h('span', { class: 'hint' }, S.sweepMsg) : null,
+        ),
       ),
       h('div', { class: 'field' },
-        h('label', {}, '즐겨찾기와 고정'),
-        h('p', { class: 'hint' }, '맨 위 아이콘은 모든 스페이스 공통 즐겨찾기, 스페이스 이름 아래 가로선 위는 그 스페이스의 고정 탭이에요. 탭을 끌어다 놓거나 우클릭 메뉴로 추가하고, 고정 탭을 가로선 아래로 끌어내리면 일반 탭이 됩니다. 탭을 닫아도 항목은 남아요.'),
+        h('label', {}, '공통 즐겨찾기와 스페이스 즐겨찾기'),
+        h('p', { class: 'hint' }, '맨 위 아이콘은 모든 스페이스에서 보이는 공통 즐겨찾기, 스페이스 이름 아래 가로선 위는 그 스페이스에서만 보이는 스페이스 즐겨찾기예요. 탭을 끌어다 놓거나 우클릭 메뉴로 추가하고, 가로선 아래로 끌어내리면 일반 탭이 됩니다. 탭을 닫아도 항목은 남아요.'),
       ),
       h('div', { class: 'field' },
         h('label', {}, '스페이스'),
@@ -811,7 +838,7 @@ function renderEditor() {
           h('button', { type: 'submit', class: 'btn primary' }, e.id ? '저장' : '만들기'),
         ),
       ),
-      e.confirmDelete ? h('p', { class: 'hint' }, '이 스페이스의 고정 탭과 저장된 탭은 아카이브로 옮겨져요.') : null,
+      e.confirmDelete ? h('p', { class: 'hint' }, '이 스페이스의 즐겨찾기와 저장된 탭은 아카이브로 옮겨져요.') : null,
     ),
   );
 }

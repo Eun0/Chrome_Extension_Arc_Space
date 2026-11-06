@@ -28,8 +28,6 @@ shot overview      overview      760
 shot overview-dark overview      760 --force-dark-mode
 shot space2        space2        760
 shot player        player        760
-shot drag          drag          760
-shot split         split         760
 shot menu          menu          760
 shot pin-menu      pin-menu      760
 shot archive       archive       760
