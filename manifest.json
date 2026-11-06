@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Arc Space",
+  "version": "0.1.0",
+  "description": "Arc 스타일 세로 탭 사이드바, 스페이스 전환, 안 본 탭 자동 아카이브",
+  "minimum_chrome_version": "121",
+  "permissions": [
+    "tabs",
+    "storage",
+    "alarms",
+    "sidePanel",
+    "favicon",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Arc Space 사이드바 열기",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": {
+        "default": "Ctrl+B",
+        "mac": "Command+B"
+      },
+      "description": "사이드바 열기/닫기"
+    },
+    "next-space": {
+      "suggested_key": {
+        "default": "Alt+Shift+Right"
+      },
+      "description": "다음 스페이스"
+    },
+    "prev-space": {
+      "suggested_key": {
+        "default": "Alt+Shift+Left"
+      },
+      "description": "이전 스페이스"
+    }
+  },
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
