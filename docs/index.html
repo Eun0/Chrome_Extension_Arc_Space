@@ -46,7 +46,7 @@ code, kbd { font-family: var(--font-mono); font-size: .86em; background: var(--c
 kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
 
 /* 헤더 */
-.hero { padding-block: 64px 48px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+.hero { padding-block: 48px 48px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
 .mark { display: flex; align-items: center; gap: 14px; }
 .mark img { width: 56px; height: 56px; }
 .mark span { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: .04em; }
@@ -56,44 +56,32 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; }
 .hero .shot { width: 300px; }
 @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero .shot { width: min(300px, 100%); } }
 
-/* 목차: 확장 사이드패널처럼 생긴 세로 목차 (좁은 화면에선 글자 링크 가로 줄) */
-.layout {
-  display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 56px;
-  max-width: 1320px; margin: 0 auto;
-}
-.layout > main { min-width: 0; }
+/* 목차: 맨 위에 고정된 한 줄 바. 로고 + 글자 링크, 지금 섹션은 코랄 밑줄 */
+.layout { display: block; }
+.layout > main { max-width: 1040px; margin: 0 auto; }
 nav.toc {
-  position: sticky; top: 24px; align-self: start; margin-top: 64px;
-  display: flex; flex-direction: column; gap: 1px; padding: 14px 8px 10px;
-  border-radius: 16px; background: color-mix(in oklab, var(--blue) 13%, var(--bg));
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  display: flex; align-items: center; gap: 20px;
+  /* 화면 끝까지 바를 깔고, 안쪽 내용은 본문 폭(1040px)에 맞춤 */
+  margin-inline: -16px; padding-inline: max(16px, calc((100% - 1040px) / 2 + 16px));
+  overflow-x: auto; scrollbar-width: none;
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
-.toc-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 12px; font-weight: 700; font-size: 14px; }
+nav.toc::-webkit-scrollbar { display: none; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 11; background: var(--bg); }
+section[id], header[id] { scroll-margin-top: 56px; }
+.toc-head { display: flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; flex: none; }
 .toc-head img { width: 20px; height: 20px; }
 nav.toc a {
-  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px;
-  color: var(--ink); text-decoration: none; font-size: 14px;
+  padding: 12px 0; white-space: nowrap; font-size: 14px; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-nav.toc a::before {
-  content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
-  background: color-mix(in oklab, var(--blue) 45%, transparent);
-}
-nav.toc a:hover { background: color-mix(in oklab, var(--blue) 9%, transparent); }
-nav.toc a.on { background: color-mix(in oklab, var(--paper) 75%, transparent); box-shadow: 0 1px 2px rgba(22, 25, 58, .10); }
-nav.toc a.on::before { background: var(--coral); }
-@media (max-width: 1080px) {
-  .layout { grid-template-columns: 1fr; gap: 0; }
-  nav.toc {
-    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin: 0;
-    flex-direction: row; gap: 18px; overflow-x: auto; padding: 0;
-    border-radius: 0; background: var(--bg); border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
-  }
-  .toc-head { display: none; }
-  nav.toc a { padding: 12px 0; border-radius: 0; white-space: nowrap; border-bottom: 2px solid transparent; }
-  nav.toc a::before { display: none; }
-  nav.toc a:hover { background: none; color: var(--blue); }
-  nav.toc a.on { background: none; box-shadow: none; border-bottom-color: var(--coral); }
-}
+nav.toc a:hover { color: var(--ink); }
+nav.toc a.on { color: var(--ink); font-weight: 500; border-bottom-color: var(--coral); }
+nav.toc a.toc-head { padding: 0; border: 0; margin: 0 8px 0 0; color: var(--ink); font-weight: 700; }
+@media (max-width: 760px) { .toc-head span { display: none; } nav.toc { gap: 16px; } }
 
 /* 설치 */
 .install { padding-block: 56px; display: grid; grid-template-columns: 220px 1fr; gap: 32px; border-bottom: 1px solid var(--line); }
@@ -162,7 +150,7 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
 <body>
 <div class="layout">
 <nav class="toc" aria-label="목차">
-  <div class="toc-head"><img src="images/logo.png" alt="">Arc Space</div>
+  <a class="toc-head" href="#top"><img src="images/logo.png" alt=""><span>Arc Space</span></a>
   <a href="#install">설치</a>
   <a href="#layout">화면 구성</a>
   <a href="#spaces">스페이스</a>
@@ -177,7 +165,7 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
 </nav>
 <main class="wrap">
 
-<header class="hero">
+<header class="hero" id="top">
   <div>
     <div class="mark"><img src="images/logo.png" alt=""><span>CHROME EXTENSION · MV3</span></div>
     <h1>크롬에서 쓰는 <em>Arc 사이드바</em></h1>
@@ -395,11 +383,11 @@ footer { padding-block: 40px 64px; color: var(--muted); font-size: 14px; }
 <script>
 // 지금 보고 있는 섹션을 목차에 표시
 (() => {
-  const links = new Map([...document.querySelectorAll('nav.toc a')].map((a) => [a.getAttribute('href').slice(1), a]));
+  const links = new Map([...document.querySelectorAll('nav.toc a:not(.toc-head)')].map((a) => [a.getAttribute('href').slice(1), a]));
   const mark = (id) => {
     links.forEach((a, key) => a.classList.toggle('on', key === id));
     const a = links.get(id);
-    if (a && getComputedStyle(a.parentElement).flexDirection === 'row') a.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (a) { const nav = a.parentElement; nav.scrollTo({ left: a.offsetLeft - nav.clientWidth / 2 + a.clientWidth / 2, behavior: 'smooth' }); }
   };
   const io = new IntersectionObserver((entries) => {
     const vis = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
