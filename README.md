@@ -8,7 +8,7 @@ Arc 대신 쓰는 크롬 확장입니다. 크롬 사이드패널에 Arc처럼 �
   <img src="docs/images/overview-dark.png" width="260" alt="다크 모드">
 </p>
 
-기능별 설명과 화면은 **[기능 안내 문서(docs/index.html)](docs/index.html)** 에 있습니다.
+기능별 설명과 화면은 **[기능 안내 페이지](https://eun0.github.io/Chrome_Extension_Arc_Space/)** 에 있습니다. (원본: [`docs/index.html`](docs/index.html))
 
 ## 설치
 
