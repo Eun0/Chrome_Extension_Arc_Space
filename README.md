@@ -2,11 +2,20 @@
 
 Arc 대신 쓰는 크롬 확장입니다. 크롬 사이드패널에 Arc처럼 세로 탭 목록과 스페이스 전환을 띄우고, 24시간 동안 안 본 탭을 자동으로 정리합니다.
 
-<p>
-  <img src="docs/images/overview.png" width="260" alt="사이드패널 전체 화면">
-  <img src="docs/images/player.png" width="260" alt="재생바를 펼친 모습">
-  <img src="docs/images/overview-dark.png" width="260" alt="다크 모드">
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/overview.png" width="250" alt="업무 스페이스"></td>
+    <td align="center"><img src="docs/images/space2.png" width="250" alt="개인 스페이스로 전환한 모습"></td>
+    <td align="center"><img src="docs/images/player.png" width="250" alt="재생바를 펼친 모습"></td>
+  </tr>
+  <tr>
+    <td align="center">업무 스페이스</td>
+    <td align="center">개인 스페이스로 전환</td>
+    <td align="center">재생바</td>
+  </tr>
+</table>
+
+하단 아이콘(업 · 🏠 · 📚)을 누르거나 사이드 휠을 돌리면 스페이스가 바뀌고, 탭 목록과 배경색이 함께 바뀝니다.
 
 기능별 설명과 화면은 **[기능 안내 페이지](https://eun0.github.io/Chrome_Extension_Arc_Space/)** 에 있습니다. (원본: [`docs/index.html`](docs/index.html))
 
