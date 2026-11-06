@@ -18,6 +18,7 @@
   --coral: #e94c63;
   --blue: #2549c9;
   --chip: #e2eaf8;
+  --num-bg: #d4344e; --num-fg: #ffffff;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   color-scheme: light;
@@ -26,6 +27,7 @@
   :root {
     --bg: #12142a; --paper: #1b1e38; --ink: #e8ebf7; --muted: #a0a7c6; --line: #2d3254;
     --coral: #ff7a8c; --blue: #8aa4ff; --chip: #262a4a;
+    --num-bg: #ff8a9b; --num-fg: #12142a;
     color-scheme: dark;
   }
 }
@@ -119,8 +121,8 @@ figcaption { font-size: 13px; color: var(--muted); }
 .anatomy li { display: grid; grid-template-columns: 150px 1fr; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .anatomy b { font-weight: 500; display: flex; align-items: center; gap: 8px; }
 .num {
-  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none;
-  background: var(--coral); color: #fff; font: 600 11px/1 var(--font-mono);
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; flex: none;
+  background: var(--num-bg); color: var(--num-fg); font: 700 14px/1 var(--font-body);
 }
 /* 화면 구성 그림: 캡처 위에 영역 박스 (좌표는 340×760 캡처 기준 %) */
 .annot { position: relative; width: 100%; max-width: 340px; }
@@ -129,7 +131,7 @@ figcaption { font-size: 13px; color: var(--muted); }
   position: absolute; border: 2px solid var(--coral); border-radius: 10px;
   background: color-mix(in oklab, var(--coral) 8%, transparent);
 }
-.box .num { position: absolute; top: -10px; right: -10px; box-shadow: 0 0 0 2px var(--paper); }
+.box .num { position: absolute; top: -12px; right: -12px; box-shadow: 0 0 0 2px var(--paper); }
 .anatomy span { color: var(--muted); font-size: 15px; }
 @media (max-width: 480px) { .anatomy li { grid-template-columns: 1fr; gap: 2px; } }
 
