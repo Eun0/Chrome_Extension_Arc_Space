@@ -4,14 +4,14 @@ Arc 대신 쓰는 크롬 확장입니다. 크롬 사이드패널에 Arc처럼 �
 
 <table>
   <tr>
+    <th>업무 스페이스</th>
+    <th>개인 스페이스로 전환</th>
+    <th>재생바</th>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/images/overview.png" width="250" alt="업무 스페이스"></td>
     <td align="center"><img src="docs/images/space2.png" width="250" alt="개인 스페이스로 전환한 모습"></td>
     <td align="center"><img src="docs/images/player.png" width="250" alt="재생바를 펼친 모습"></td>
-  </tr>
-  <tr>
-    <td align="center">업무 스페이스</td>
-    <td align="center">개인 스페이스로 전환</td>
-    <td align="center">재생바</td>
   </tr>
 </table>
 
