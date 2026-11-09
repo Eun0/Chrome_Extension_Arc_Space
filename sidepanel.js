@@ -34,7 +34,40 @@ function h(tag, props = {}, ...kids) {
   return el;
 }
 const send = (type, data = {}) => chrome.runtime.sendMessage({ type, windowId: S.windowId, ...data });
-const fav = (url) => `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(url || '')}&size=32`;
+// 파비콘: 탭이 실제로 불러온 아이콘(favIconUrl)을 먼저 쓰고, 없으면 사이트별로 마지막에 본 아이콘,
+// 그것도 없으면 크롬 파비콘 저장소(_favicon). 로그인이 필요한 사내 사이트는 _favicon 에 잘 안 남기 때문.
+// 앞의 두 가지가 깨지면(이미지 로드 실패) _favicon 으로 바꾼다.
+const chromeFav = (url) => `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(url || '')}&size=32`;
+const favCache = {};          // { [origin]: favIconUrl }  chrome.storage.local 'favCache' 에 저장
+const favFallback = new Map(); // 후보 주소 → 실패 시 쓸 _favicon 주소
+const originOf = (u) => { try { return new URL(u).origin; } catch { return ''; } };
+const usableIcon = (u) => typeof u === 'string' && (/^https?:/i.test(u) || (u.startsWith('data:image/') && u.length < 40000));
+function fav(url, tab) {
+  const own = tab && usableIcon(tab.favIconUrl) ? tab.favIconUrl : null;
+  const cand = own || favCache[originOf(url)];
+  if (!cand) return chromeFav(url);
+  favFallback.set(cand, chromeFav(url));
+  return cand;
+}
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (img?.tagName !== 'IMG') return;
+  const fb = favFallback.get(img.getAttribute('src'));
+  if (fb && img.getAttribute('src') !== fb) img.src = fb;
+}, true);
+let favSaveTimer;
+function rememberFavicons(tabs) {
+  let changed = false;
+  for (const t of tabs) {
+    const o = originOf(tabUrl(t));
+    if (!o || !usableIcon(t.favIconUrl) || favCache[o] === t.favIconUrl) continue;
+    favCache[o] = t.favIconUrl;
+    changed = true;
+  }
+  if (!changed) return;
+  clearTimeout(favSaveTimer);
+  favSaveTimer = setTimeout(() => chrome.storage.local.set({ favCache }), 1000);
+}
 // 언로드해 둔 탭은 주소·제목이 비어 있을 수 있어서 저장해 둔 값으로 보완한다
 // 지연 로딩 자리표시 탭(data:...#원래주소)은 원래 주소로 바꿔서 보여 준다
 const LAZY_PREFIX = 'data:text/html;charset=utf-8,';
@@ -107,6 +140,7 @@ async function loadLazy() {
 }
 async function loadTabs() {
   S.tabs = await chrome.tabs.query({ windowId: S.windowId });
+  rememberFavicons(S.tabs);
   const ids = new Set(S.tabs.map((t) => t.id));
   for (const t of S.tabs) {
     if (t.audible) S.media = [t.id, ...S.media.filter((id) => id !== t.id)];
@@ -289,7 +323,7 @@ function strayTile(t) {
         { label: '닫기', run: () => chrome.tabs.remove(t.id) },
       ]);
     },
-  }, h('img', { src: fav(tabUrl(t)), alt: '' }));
+  }, h('img', { src: fav(tabUrl(t), t), alt: '' }));
 }
 
 // ---------- 스페이스 즐겨찾기 (가로선 위) ----------
@@ -314,7 +348,7 @@ function pinRow(p, i, tab) {
       },
     ),
   },
-    p.icon ? pinIcon(p, p.url, 'fav') : h('img', { class: 'fav', src: fav(navigated ? tabUrl(tab) : p.url), alt: '' }),
+    p.icon ? pinIcon(p, p.url, 'fav') : h('img', { class: 'fav', src: navigated ? fav(tabUrl(tab), tab) : fav(p.url), alt: '' }),
     h('span', { class: 'title' },
       navigated ? [h('span', { class: 'slash' }, '/ '), tabTitle(tab)] : (p.title || hostOf(p.url)),
     ),
@@ -354,7 +388,7 @@ function tabRow(t) {
     ondragend: (e) => e.currentTarget.classList.remove('dragging'),
     ...tabDropHandlers(t),
   },
-    h('img', { class: 'fav', src: fav(tabUrl(t)), alt: '' }),
+    h('img', { class: 'fav', src: fav(tabUrl(t), t), alt: '' }),
     h('span', { class: 'title' }, tabTitle(t)),
     t.audible ? h('span', { class: 'audio', title: '소리 재생 중' }, '♪') : null,
     h('button', {
@@ -441,7 +475,7 @@ function splitRow(a, b) {
     onclick: (e) => { e.stopPropagation(); chrome.tabs.update(t.id, { active: true }); },
     onauxclick: (e) => { if (e.button === 1) { e.stopPropagation(); chrome.tabs.remove(t.id); } },
   },
-    h('img', { class: 'fav', src: fav(tabUrl(t)), alt: '' }),
+    h('img', { class: 'fav', src: fav(tabUrl(t), t), alt: '' }),
     h('span', { class: 'title' }, tabTitle(t)),
   );
   return h('li', {
@@ -635,7 +669,7 @@ function renderPlayer() {
         e.preventDefault();
         openMenu(e, [{ label: '플레이어 숨기기', run: () => { S.media = S.media.filter((id) => id !== t.id); } }]);
       },
-    }, h('img', { src: fav(tabUrl(t)), alt: '' })),
+    }, h('img', { src: fav(tabUrl(t), t), alt: '' })),
     // 이전·재생·다음은 한 덩어리: 패널이 넓어져도 셋 사이 간격은 그대로
     h('div', { class: 'pgroup' },
       btn('prev', '이전', () => controlMedia(t, 'prev')),
@@ -1110,6 +1144,7 @@ document.addEventListener('keydown', (e) => {
   const connect = () => chrome.runtime.connect({ name: `panel:${S.windowId}` }).onDisconnect.addListener(() => setTimeout(connect, 500));
   connect();
   await loadState();
+  Object.assign(favCache, (await chrome.storage.local.get('favCache')).favCache || {});
   await loadLazy();
   await loadTabs();
   render();
