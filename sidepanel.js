@@ -614,7 +614,7 @@ function readMediaSession() {
 async function refreshMediaInfo(t) {
   if (mediaInfoBusy) return;
   const cur = mediaInfo[t.id];
-  if (cur && Date.now() - cur.at < 4000) return;
+  if (cur && Date.now() - cur.at < 1500) return;
   mediaInfoBusy = true;
   try {
     const origin = new URL(tabUrl(t)).origin + '/*';
@@ -630,12 +630,12 @@ async function refreshMediaInfo(t) {
     mediaInfoBusy = false;
   }
 }
-// 펼쳐져 있는 동안은 곡이 바뀌어도 따라가도록 주기적으로 갱신
+// 재생바가 떠 있는 동안 곡 정보를 미리 읽어 둔다. 마우스를 올리는 순간 바로 제목이 보이도록.
 setInterval(() => {
-  if (!S.playerHover) return;
+  if (document.hidden) return;
   const t = S.media.map((id) => S.tabs.find((x) => x.id === id)).find((x) => x && !x.active);
   if (t) refreshMediaInfo(t);
-}, 4000);
+}, 2000);
 
 function renderPlayer() {
   const byId = new Map(S.tabs.map((t) => [t.id, t]));
