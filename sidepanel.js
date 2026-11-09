@@ -18,8 +18,18 @@ const S = {
 };
 
 // ---------- 유틸 ----------
+// 다시 그릴 때 같은 그림의 <img> 는 새로 만들지 않고 옮겨 쓴다.
+// 새로 만들면 아이콘(특히 data: SVG)을 다시 해석하는 동안 한 프레임 비어서 깜박인다.
+let imgPool = null;  // render() 동안만: src → [img]
+function takeImg(src) {
+  const list = imgPool?.get(src);
+  const el = list?.pop();
+  if (!el) return null;
+  for (const a of [...el.attributes]) if (a.name !== 'src') el.removeAttribute(a.name);
+  return el;
+}
 function h(tag, props = {}, ...kids) {
-  const el = document.createElement(tag);
+  const el = (tag === 'img' && props?.src && takeImg(props.src)) || document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className = v;
@@ -28,6 +38,7 @@ function h(tag, props = {}, ...kids) {
     else if (k === 'html') el.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === 'value') el.value = v;
+    else if (k === 'src' && el.getAttribute('src') === v) continue;  // 옮겨 쓴 <img>: 다시 불러오지 않게
     else el.setAttribute(k, v === true ? '' : v);
   }
   for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
@@ -38,35 +49,76 @@ const send = (type, data = {}) => chrome.runtime.sendMessage({ type, windowId: S
 // 그것도 없으면 크롬 파비콘 저장소(_favicon). 로그인이 필요한 사내 사이트는 _favicon 에 잘 안 남기 때문.
 // 앞의 두 가지가 깨지면(이미지 로드 실패) _favicon 으로 바꾼다.
 const chromeFav = (url) => `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(url || '')}&size=32`;
-const favCache = {};          // { [origin]: favIconUrl }  chrome.storage.local 'favCache' 에 저장
+const favCache = {};          // { [origin]: { icon, depth } }  chrome.storage.local 'favCache' 에 저장
+// 사이트 대표 아이콘과 다른 아이콘을 쓰는 페이지(예: claude.ai 아티팩트)는 주소별로 따로 기억한다
+const favPages = {};          // { [주소(# 제외)]: favIconUrl }  chrome.storage.local 'favPages'
+const FAV_PAGES_MAX = 300;
+const pageKey = (u) => { try { const x = new URL(u); x.hash = ''; return x.href; } catch { return ''; } };
 const favFallback = new Map(); // 후보 주소 → 실패 시 쓸 _favicon 주소
 const originOf = (u) => { try { return new URL(u).origin; } catch { return ''; } };
 const usableIcon = (u) => typeof u === 'string' && (/^https?:/i.test(u) || (u.startsWith('data:image/') && u.length < 40000));
+// 탭을 새로고침하는 동안에는 아이콘이 잠깐 비거나 바뀐다. 그동안은 그 탭의 마지막 아이콘을 그대로 쓴다.
+const lastTabIcon = new Map();  // tabId → favIconUrl
+function tabIcon(tab) {
+  if (!tab) return null;
+  if (tab.status === 'complete') {
+    if (!usableIcon(tab.favIconUrl)) { lastTabIcon.delete(tab.id); return null; }
+    lastTabIcon.set(tab.id, tab.favIconUrl);
+    return tab.favIconUrl;
+  }
+  return lastTabIcon.get(tab.id) || (usableIcon(tab.favIconUrl) ? tab.favIconUrl : null);
+}
+// 확장 페이지에서 못 불러오는 아이콘 주소(예: 보안 검사로 막히는 claude.ai/favicon.ico)는 기억해 두고 다시 시도하지 않는다.
+// 다시 시도하면 "실패 → 대체 아이콘 → 다시 그리면 또 실패"가 반복되며 깜박인다.
+const failedIcons = new Set();
+const okIcon = (u) => u && !failedIcons.has(u) ? u : null;
 function fav(url, tab) {
-  const own = tab && usableIcon(tab.favIconUrl) ? tab.favIconUrl : null;
-  const cand = own || favCache[originOf(url)];
-  if (!cand) return chromeFav(url);
-  favFallback.set(cand, chromeFav(url));
+  const cand = okIcon(tabIcon(tab)) || okIcon(favPages[pageKey(url)]) || okIcon(favCache[originOf(url)]?.icon);
+  // 대체 아이콘은 탭이 지금 보고 있는 페이지 기준: 크롬이 그 탭 바에 띄운 아이콘과 같다
+  const fallback = chromeFav(tab ? tabUrl(tab) : url);
+  if (!cand) return fallback;
+  favFallback.set(cand, fallback);
   return cand;
 }
 document.addEventListener('error', (e) => {
   const img = e.target;
   if (img?.tagName !== 'IMG') return;
-  const fb = favFallback.get(img.getAttribute('src'));
-  if (fb && img.getAttribute('src') !== fb) img.src = fb;
+  const src = img.getAttribute('src');
+  const fb = favFallback.get(src);
+  if (!fb || src === fb) return;
+  failedIcons.add(src);
+  img.src = fb;
 }, true);
 let favSaveTimer;
+// 사이트 대표 아이콘: 주소가 가장 짧은(사이트 첫 화면에 가까운) 페이지의 아이콘을 기억한다.
+// claude.ai 아티팩트처럼 하위 페이지가 자기 아이콘을 따로 띄워도 대표 아이콘을 덮어쓰지 않는다.
+// 로딩 중인 탭은 이전 페이지 아이콘을 들고 있을 수 있어서 다 열린 탭만 본다.
+const pathDepth = (u) => { try { return new URL(u).pathname.split('/').filter(Boolean).length; } catch { return 99; } };
 function rememberFavicons(tabs) {
   let changed = false;
   for (const t of tabs) {
-    const o = originOf(tabUrl(t));
-    if (!o || !usableIcon(t.favIconUrl) || favCache[o] === t.favIconUrl) continue;
-    favCache[o] = t.favIconUrl;
-    changed = true;
+    const url = tabUrl(t);
+    const o = originOf(url);
+    if (!o || t.status !== 'complete' || !usableIcon(t.favIconUrl) || failedIcons.has(t.favIconUrl)) continue;
+    const depth = pathDepth(url);
+    const cur = favCache[o];
+    if (!cur || (cur.icon !== t.favIconUrl && cur.depth >= depth)) {
+      favCache[o] = { icon: t.favIconUrl, depth };
+      changed = true;
+    }
+    // 대표 아이콘과 다르면 이 페이지 주소로 따로 기억, 같으면 따로 둘 필요 없음
+    const key = pageKey(url);
+    const icon = favCache[o].icon === t.favIconUrl ? undefined : t.favIconUrl;
+    if (favPages[key] !== icon) {
+      if (icon) { delete favPages[key]; favPages[key] = icon; } else delete favPages[key];
+      changed = true;
+    }
   }
   if (!changed) return;
+  const keys = Object.keys(favPages);
+  for (const k of keys.slice(0, Math.max(0, keys.length - FAV_PAGES_MAX))) delete favPages[k];  // 오래된 것부터 정리
   clearTimeout(favSaveTimer);
-  favSaveTimer = setTimeout(() => chrome.storage.local.set({ favCache }), 1000);
+  favSaveTimer = setTimeout(() => chrome.storage.local.set({ favCache, favPages }), 1000);
 }
 // 언로드해 둔 탭은 주소·제목이 비어 있을 수 있어서 저장해 둔 값으로 보완한다
 // 지연 로딩 자리표시 탭(data:...#원래주소)은 원래 주소로 바꿔서 보여 준다
@@ -201,6 +253,14 @@ function render() {
   const sp = activeSpace();
   document.documentElement.style.setProperty('--space', sp?.color || COLORS[0]);
   const app = document.getElementById('app');
+  imgPool = new Map();
+  for (const img of app.querySelectorAll('img')) {
+    const src = img.getAttribute('src');
+    if (!src) continue;
+    if (!imgPool.has(src)) imgPool.set(src, []);
+    imgPool.get(src).push(img);
+  }
+  try {
   app.replaceChildren(...[
     S.view === 'archive' ? renderArchive() : S.view === 'settings' ? renderSettings() : renderTabs(sp),
     renderPlayer(),
@@ -209,6 +269,7 @@ function render() {
     S.iconEditor ? renderIconEditor() : null,
     S.menu ? renderMenu() : null,
   ].filter(Boolean));
+  } finally { imgPool = null; }
 
   if (fid) {
     const n = document.getElementById(fid);
@@ -364,7 +425,7 @@ function pinRow(p, i, tab) {
       },
     ),
   },
-    p.icon ? pinIcon(p, p.url, 'fav') : h('img', { class: 'fav', src: navigated ? fav(tabUrl(tab), tab) : fav(p.url), alt: '' }),
+    p.icon ? pinIcon(p, p.url, 'fav') : h('img', { class: 'fav', src: tab ? fav(navigated ? tabUrl(tab) : p.url, tab) : fav(p.url), alt: '' }),
     h('span', { class: 'title' },
       navigated ? [h('span', { class: 'slash' }, '/ '), tabTitle(tab)] : (p.title || hostOf(p.url)),
     ),
@@ -1183,7 +1244,12 @@ document.addEventListener('keydown', (e) => {
   const connect = () => chrome.runtime.connect({ name: `panel:${S.windowId}` }).onDisconnect.addListener(() => setTimeout(connect, 500));
   connect();
   await loadState();
-  Object.assign(favCache, (await chrome.storage.local.get('favCache')).favCache || {});
+  // 예전 버전 형식(문자열)은 버리고 새로 모은다
+  const saved = await chrome.storage.local.get(['favCache', 'favPages']);
+  for (const [o, v] of Object.entries(saved.favCache || {})) {
+    if (v && typeof v === 'object' && usableIcon(v.icon)) favCache[o] = v;
+  }
+  Object.assign(favPages, saved.favPages || {});
   await loadLazy();
   await loadTabs();
   render();
