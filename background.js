@@ -155,17 +155,28 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // ---------- 스페이스 전환 ----------
+// 전환 중에는 옛 탭과 새 탭이 잠깐 같이 있다. 사이드패널이 그 중간 상태를 그리지 않도록 표시해 둔다.
 async function switchSpace(targetId, windowId) {
   const st = await getState();
   if (targetId === st.activeSpaceId) return;
   const target = st.spaces.find((s) => s.id === targetId);
   if (!target) return;
+  await chrome.storage.session.set({ switching: { to: targetId, at: Date.now() } });
+  try {
+    await doSwitch(st, target, targetId, windowId);
+  } finally {
+    await chrome.storage.session.remove('switching');
+  }
+}
+
+async function doSwitch(st, target, targetId, windowId) {
   const current = activeOf(st);
   windowId = await resolveWindow(windowId);
 
   const overrides = await getOverrides();
   const lazy = await getLazy();
-  const live = (await chrome.tabs.query({ windowId })).filter((t) => !t.pinned);
+  const all = await chrome.tabs.query({ windowId });
+  const live = all.filter((t) => !t.pinned);
 
   // 1) 현재 스페이스 저장: 스페이스 즐겨찾기 탭은 "열려 있었음"만 기록, 나머지는 일반 탭으로 저장
   if (current) {
@@ -194,16 +205,23 @@ async function switchSpace(targetId, windowId) {
   if (activeIdx < 0) activeIdx = toOpen.length - 1;
   for (const t of live) { delete overrides[t.id]; delete lazy[t.id]; }
   const splitPairs = new Map();  // 저장된 split 값 → 새로 만든 탭 ID 들
+  // 탭은 한꺼번에 연다 (하나씩 기다리면 탭 수만큼 느려진다). 순서는 index 로 고정.
+  const base = all.length;
+  const createdTabs = await Promise.all(toOpen.map(async (item, i) => {
+    const active = i === activeIdx;
+    const index = base + i;
+    // 지금 볼 탭만 바로 로드하고, 나머지는 자리표시로 열어 두었다가 클릭할 때 로드
+    let created = null;
+    if (!active && canLazy(item.url)) {
+      created = await chrome.tabs.create({ windowId, index, url: lazyPageUrl(item.url, item.title), active: false })
+        .catch(() => null);
+    }
+    return created ?? chrome.tabs.create({ windowId, index, url: item.url, active });
+  }));
   for (let i = 0; i < toOpen.length; i++) {
     const item = toOpen[i];
     const active = i === activeIdx;
-    // 지금 볼 탭만 바로 로드하고, 나머지는 자리표시로 열어 두었다가 클릭할 때 로드
-    let created;
-    if (!active && canLazy(item.url)) {
-      created = await chrome.tabs.create({ windowId, url: lazyPageUrl(item.url, item.title), active: false })
-        .catch(() => null);
-    }
-    created ??= await chrome.tabs.create({ windowId, url: item.url, active });
+    const created = createdTabs[i];
     if (item.pin) item.pin.tabId = created.id;
     // 다시 열었다고 "방금 본 탭"이 되지 않도록, 원래 마지막 접근 시각을 기억해 둔다
     else if (!active && item.lastAccessed) overrides[created.id] = item.lastAccessed;

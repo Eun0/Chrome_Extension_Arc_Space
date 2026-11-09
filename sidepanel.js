@@ -138,8 +138,24 @@ async function loadState() {
 async function loadLazy() {
   ({ lazy: S.lazy = {} } = await chrome.storage.session.get('lazy'));
 }
+// 스페이스 전환 중에는 옛 탭과 새 탭이 잠깐 같이 있다.
+// 전환이 시작되면 바로 새 스페이스로 바꿔 그리고, 곧 닫힐 옛 탭은 목록에서 숨긴다.
+// 끝 신호를 놓쳐도 5초 뒤엔 풀린다.
+const leaving = new Set();
+let switchTimer;
+function setSwitching(sw) {
+  clearTimeout(switchTimer);
+  if (sw) {
+    for (const t of S.tabs) if (!t.pinned) leaving.add(t.id);
+    if (sw.to) S.activeSpaceId = sw.to;
+    switchTimer = setTimeout(() => setSwitching(null), 5000);
+  } else {
+    leaving.clear();
+  }
+  loadTabs().then(render);
+}
 async function loadTabs() {
-  S.tabs = await chrome.tabs.query({ windowId: S.windowId });
+  S.tabs = (await chrome.tabs.query({ windowId: S.windowId })).filter((t) => !leaving.has(t.id));
   rememberFavicons(S.tabs);
   const ids = new Set(S.tabs.map((t) => t.id));
   for (const t of S.tabs) {
@@ -1129,6 +1145,29 @@ document.addEventListener('dragstart', (e) => {
   }
 });
 
+// 끄는 중에 목록 위·아래 끝으로 가면 자동으로 스크롤 (탭이 많아 맨 위 공통 즐겨찾기가 가려졌을 때)
+let autoScroll = { el: null, speed: 0, raf: 0 };
+function autoScrollTick() {
+  const a = autoScroll;
+  if (!dragging || !a.el || !a.speed) { a.raf = 0; return; }
+  a.el.scrollTop += a.speed;
+  a.raf = requestAnimationFrame(autoScrollTick);
+}
+document.addEventListener('dragover', (e) => {
+  const el = document.querySelector('.main');
+  if (!el || el.scrollHeight <= el.clientHeight) { autoScroll.speed = 0; return; }
+  const r = el.getBoundingClientRect();
+  const EDGE = 60, MAX = 18;
+  let speed = 0;
+  if (e.clientY < r.top + EDGE) speed = -Math.ceil(MAX * (1 - Math.max(0, e.clientY - r.top) / EDGE));
+  else if (e.clientY > r.bottom - EDGE) speed = Math.ceil(MAX * (1 - Math.max(0, r.bottom - e.clientY) / EDGE));
+  autoScroll.el = el;
+  autoScroll.speed = speed;
+  if (speed && !autoScroll.raf) autoScroll.raf = requestAnimationFrame(autoScrollTick);
+}, true);
+document.addEventListener('dragend', () => { autoScroll.speed = 0; }, true);
+document.addEventListener('drop', () => { autoScroll.speed = 0; }, true);
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (S.menu) closeMenu();
@@ -1151,6 +1190,7 @@ document.addEventListener('keydown', (e) => {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'session') {
+      if (changes.switching) setSwitching(changes.switching.newValue);
       if (changes.lazy) { S.lazy = changes.lazy.newValue || {}; render(); }
       return;
     }
