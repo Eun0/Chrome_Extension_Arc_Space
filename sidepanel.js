@@ -568,12 +568,50 @@ function controlMedia(t, action) {
 }
 
 
+// 재생 중인 곡 정보 (Media Session). YouTube Music 처럼 탭 제목이 곡과 상관없이 고정된 사이트용.
+// 사이트 접근을 허용한 탭에서만 읽는다 (재생바 버튼을 처음 누를 때 허용).
+const mediaInfo = {};   // { [tabId]: { text, at } }
+let mediaInfoBusy = false;
+function readMediaSession() {
+  const m = navigator.mediaSession?.metadata;
+  if (!m || !m.title) return null;
+  return m.artist ? `${m.title} · ${m.artist}` : m.title;
+}
+async function refreshMediaInfo(t) {
+  if (mediaInfoBusy) return;
+  const cur = mediaInfo[t.id];
+  if (cur && Date.now() - cur.at < 4000) return;
+  mediaInfoBusy = true;
+  try {
+    const origin = new URL(tabUrl(t)).origin + '/*';
+    if (!(await chrome.permissions.contains({ origins: [origin] }))) return;
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: t.id }, world: 'MAIN', func: readMediaSession });
+    const text = res?.result || null;
+    const changed = (cur?.text || null) !== text;
+    mediaInfo[t.id] = { text, at: Date.now() };
+    if (changed) render();
+  } catch {
+    mediaInfo[t.id] = { text: null, at: Date.now() };
+  } finally {
+    mediaInfoBusy = false;
+  }
+}
+// 펼쳐져 있는 동안은 곡이 바뀌어도 따라가도록 주기적으로 갱신
+setInterval(() => {
+  if (!S.playerHover) return;
+  const t = S.media.map((id) => S.tabs.find((x) => x.id === id)).find((x) => x && !x.active);
+  if (t) refreshMediaInfo(t);
+}, 4000);
+
 function renderPlayer() {
   const byId = new Map(S.tabs.map((t) => [t.id, t]));
   const t = S.media.map((id) => byId.get(id)).find((x) => x && !x.active);
   if (!t) return null;
   const playing = S.playOverride[t.id]?.playing ?? !!t.audible;
   const muted = !!t.mutedInfo?.muted;
+  // 곡 정보가 있으면 그것, 없으면 탭 제목. 처음 보이면 한 번 읽어 온다.
+  if (!mediaInfo[t.id]) refreshMediaInfo(t);
+  const nowPlaying = mediaInfo[t.id]?.text || tabTitle(t);
   // 누르는 순간 바로 실행 (키보드로 누를 때는 click 으로 처리)
   const btn = (name, title, run) =>
     h('button', {
@@ -585,10 +623,10 @@ function renderPlayer() {
   // 다시 그려져도 펼친 상태가 유지되도록 상태로 들고 있고, 클래스는 직접 토글해서 깜빡임을 막는다.
   return h('div', {
     class: 'player' + (S.playerHover ? ' expanded' : ''),
-    onmouseenter: (e) => { S.playerHover = true; e.currentTarget.classList.add('expanded'); },
+    onmouseenter: (e) => { S.playerHover = true; e.currentTarget.classList.add('expanded'); refreshMediaInfo(t); },
     onmouseleave: (e) => { S.playerHover = false; e.currentTarget.classList.remove('expanded'); },
   },
-    h('div', { class: 'ptitle', title: tabTitle(t) }, tabTitle(t)),
+    h('div', { class: 'ptitle', title: nowPlaying }, nowPlaying),
     h('div', { class: 'prow' },
     h('button', {
       class: 'pbtn psrc', title: `${tabTitle(t)}\n클릭하면 이 탭으로 이동`,
