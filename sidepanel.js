@@ -324,7 +324,8 @@ function renderTabs(sp) {
       class: 'newtab', onclick: () => chrome.tabs.create({ windowId: S.windowId }),
       ...dropTarget((e) => hasType(e, 'text/x-pin'), (e) => unpinToRegular(dragPin(e))),
     }, h('span', { class: 'plus' }, '+'), '새 탭'),
-    h('ul', { class: 'tabs tab-list' }, groupSplits(normal).map((g) => (g.length === 2 ? splitRow(g[0], g[1]) : tabRow(g[0])))),
+    // 크롬 탭 순서를 거꾸로: 새로 연 탭(맨 오른쪽)이 목록 맨 위에 온다
+    h('ul', { class: 'tabs tab-list' }, groupSplits(normal).reverse().map((g) => (g.length === 2 ? splitRow(g[0], g[1]) : tabRow(g[0])))),
     normal.length ? null : h('p', { class: 'empty' }, '열린 탭이 없어요.'),
     // 목록 아래 빈 공간: 즐겨찾기를 끌어 놓으면 일반 탭으로
     h('div', { class: 'tail', ...dropTarget((e) => hasType(e, 'text/x-pin'), (e) => unpinToRegular(dragPin(e))) }),
@@ -898,6 +899,21 @@ const SHORTCUT_ROWS = [
   ['next-space', '다음 스페이스'],
 ];
 const HOUR_LABELS = { 0: '끄기', 6: '6시간', 12: '12시간', 24: '24시간', 72: '3일', 168: '7일' };
+const hoursText = (h) => HOUR_LABELS[h] || (h % 24 === 0 ? `${h / 24}일` : `${h}시간`);
+// 직접 입력: 숫자 + 단위(시간/일). 1시간 ~ 365일.
+function applyCustomHours() {
+  const n = Number(document.getElementById('custom-hours')?.value);
+  const unit = document.getElementById('custom-unit')?.value === 'd' ? 24 : 1;
+  const msg = document.getElementById('custom-msg');
+  const v = Math.round(n * unit);
+  if (!Number.isFinite(n) || n <= 0 || v < 1 || v > 365 * 24) {
+    if (msg) msg.textContent = '1시간부터 365일까지 입력할 수 있어요.';
+    return;
+  }
+  S.sweepMsg = null;
+  S.customDraft = null;
+  send('setSettings', { patch: { archiveHours: v } });
+}
 
 function renderSettings() {
   if (!S.commands) loadCommands();
@@ -917,12 +933,33 @@ function renderSettings() {
       h('section', { class: 'set-group' },
         h('h3', { class: 'set-title' }, '안 본 탭 자동 정리'),
         h('p', { class: 'set-desc' },
-          hours ? `가로선 아래 일반 탭 중 ${HOUR_LABELS[hours] || hours + '시간'} 동안 안 본 탭을 아카이브로 옮겨요.` : '자동 정리가 꺼져 있어요.'),
+          hours ? `가로선 아래 일반 탭 중 ${hoursText(hours)} 동안 안 본 탭을 아카이브로 옮겨요.` : '자동 정리가 꺼져 있어요.'),
         h('div', { class: 'seg-row', role: 'radiogroup', 'aria-label': '정리 기준 시간' },
           HOURS.map(([v]) => h('button', {
             class: 'seg-opt' + (hours === v ? ' on' : ''), role: 'radio', 'aria-checked': String(hours === v),
-            onclick: () => { S.sweepMsg = null; send('setSettings', { patch: { archiveHours: v } }); },
+            onclick: () => { S.sweepMsg = null; S.customDraft = null; send('setSettings', { patch: { archiveHours: v } }); },
           }, HOUR_LABELS[v]))),
+        (() => {
+          const custom = hours > 0 && !(hours in HOUR_LABELS);
+          const useDays = custom && hours % 24 === 0;
+          const onKey = (e) => { if (e.key === 'Enter') applyCustomHours(); };
+          // 입력 중에 탭 변화로 화면이 다시 그려져도 쓰던 값이 지워지지 않게 들고 있는다
+          const d = S.customDraft;
+          const keep = () => { S.customDraft = { n: document.getElementById('custom-hours').value, unit: document.getElementById('custom-unit').value }; };
+          return h('div', { class: 'custom-row' + (custom ? ' on' : '') },
+            h('label', { for: 'custom-hours' }, '직접 입력'),
+            h('input', {
+              id: 'custom-hours', type: 'number', min: '1', step: '1', inputmode: 'numeric', placeholder: '36',
+              value: d ? d.n : custom ? String(useDays ? hours / 24 : hours) : null, onkeydown: onKey, oninput: keep,
+            }),
+            h('select', { id: 'custom-unit', 'aria-label': '단위', onkeydown: onKey, onchange: keep },
+              h('option', { value: 'h', selected: d ? d.unit === 'h' : !useDays }, '시간'),
+              h('option', { value: 'd', selected: d ? d.unit === 'd' : useDays }, '일'),
+            ),
+            h('button', { class: 'btn-tint', onclick: applyCustomHours }, '적용'),
+          );
+        })(),
+        h('p', { class: 'set-note', id: 'custom-msg', 'aria-live': 'polite' }),
         h('p', { class: 'set-note' }, '즐겨찾기, 지금 보는 탭, 소리 나는 탭은 닫지 않아요.'),
         h('div', { class: 'sweep-row' },
           h('button', { class: 'btn-tint', onclick: sweepNow, disabled: !hours }, '지금 정리하기'),
