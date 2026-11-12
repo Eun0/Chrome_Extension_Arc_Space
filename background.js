@@ -142,7 +142,23 @@ async function reattach({ reset }) {
   };
   st.favorites.forEach((p) => match(p, (t) => t.pinned));
   activeOf(st)?.pins.forEach((p) => match(p, (t) => !t.pinned));
+  // 고정 탭 안에서 다른 페이지로 옮겨 간 경우: 같은 사이트의 고정 탭과 연결
+  const host = (u) => { try { return new URL(u).host; } catch { return ''; } };
+  for (const p of st.favorites) {
+    if (p.tabId != null || !host(p.url)) continue;
+    const t = tabs.find((t) => t.pinned && !used.has(t.id) && host(tabUrl(t)) === host(p.url));
+    if (t) { p.tabId = t.id; used.add(t.id); }
+  }
+  const before = await chrome.storage.local.get(['favorites', 'spaces']);
+  if (JSON.stringify(before.favorites) === JSON.stringify(st.favorites)
+    && JSON.stringify(before.spaces) === JSON.stringify(st.spaces)) return;
   await chrome.storage.local.set({ favorites: st.favorites, spaces: st.spaces });
+}
+// 탭이 생기거나 고정되거나 주소가 바뀌면 다시 연결 (세션 복원이 늦게 끝나도 따라잡는다)
+let relinkTimer = null;
+function scheduleRelink() {
+  clearTimeout(relinkTimer);
+  relinkTimer = setTimeout(() => serial(() => reattach({ reset: false })), 1000);
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -483,6 +499,20 @@ async function openPin({ kind, pinId, windowId }) {
       return;
     } catch { delete p.tabId; }
   }
+  // 연결이 끊겼을 뿐 같은 페이지·사이트 탭이 이미 열려 있으면 새로 열지 않고 그 탭과 다시 연결
+  const host = (u) => { try { return new URL(u).host; } catch { return ''; } };
+  const used = pinnedTabIds(st);
+  const cands = (await chrome.tabs.query({ windowType: 'normal' }))
+    .filter((t) => !used.has(t.id) && t.pinned === (kind === 'fav'));
+  const found = cands.find((t) => tabUrl(t) === p.url)
+    || (kind === 'fav' && host(p.url) && cands.find((t) => host(tabUrl(t)) === host(p.url)));
+  if (found) {
+    p.tabId = found.id;
+    await chrome.storage.local.set({ favorites: st.favorites, spaces: st.spaces });
+    await chrome.windows.update(found.windowId, { focused: true }).catch(() => {});
+    await chrome.tabs.update(found.id, { active: true });
+    return;
+  }
   const t = await chrome.tabs.create({
     windowId: await resolveWindow(windowId), url: p.url, active: true, pinned: kind === 'fav',
   });
@@ -680,10 +710,11 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 });
 
 // 활성 스페이스 탭 저장: 탭이 바뀔 때마다 (잠깐 모았다가) 저장. 창을 닫느라 닫힌 탭은 저장본에서 빼지 않는다.
-chrome.tabs.onCreated.addListener(scheduleSnapshot);
+chrome.tabs.onCreated.addListener(() => { scheduleSnapshot(); scheduleRelink(); });
 chrome.tabs.onRemoved.addListener((_id, info) => { if (!info.isWindowClosing) scheduleSnapshot(); });
 chrome.tabs.onUpdated.addListener((_id, info) => {
   if (info.url || info.title || 'pinned' in info || info.splitViewId !== undefined) scheduleSnapshot();
+  if (info.url || info.pinned) scheduleRelink();
 });
 for (const ev of ['onMoved', 'onActivated', 'onAttached', 'onDetached', 'onReplaced']) chrome.tabs[ev].addListener(scheduleSnapshot);
 // 활성 스페이스 창이 닫힌 뒤 다른 창을 쓰거나 새 창을 열면 그 창이 이어받는다
