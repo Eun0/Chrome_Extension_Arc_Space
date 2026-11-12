@@ -710,7 +710,13 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 });
 
 // 활성 스페이스 탭 저장: 탭이 바뀔 때마다 (잠깐 모았다가) 저장. 창을 닫느라 닫힌 탭은 저장본에서 빼지 않는다.
-chrome.tabs.onCreated.addListener(() => { scheduleSnapshot(); scheduleRelink(); });
+chrome.tabs.onCreated.addListener((tab) => { scheduleSnapshot(); scheduleRelink(); toEnd(tab); });
+// 링크를 새 탭으로 열면 크롬은 원래 탭 바로 옆에 둔다. 사이드패널 목록은 맨 끝 탭이 맨 위이므로,
+// 새 탭이 목록 맨 위에 오도록 창의 맨 끝으로 옮긴다. (확장이 직접 여는 탭은 openerTabId 가 없어 건드리지 않음)
+function toEnd(tab) {
+  if (tab.pinned || tab.openerTabId == null || tab.windowId == null) return;
+  chrome.tabs.move(tab.id, { index: -1 }).catch(() => {});
+}
 chrome.tabs.onRemoved.addListener((_id, info) => { if (!info.isWindowClosing) scheduleSnapshot(); });
 chrome.tabs.onUpdated.addListener((_id, info) => {
   if (info.url || info.title || 'pinned' in info || info.splitViewId !== undefined) scheduleSnapshot();
