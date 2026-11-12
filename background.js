@@ -5,13 +5,15 @@
 //   spaces:        [{ id, name, icon, color,
 //                     pins: [{ id, url, title, tabId?, wasOpen?, wasActive? }],  스페이스 즐겨찾기 (가로선 위)
 //                     tabs: [{ url, title, lastAccessed, active }] }]            일반 탭 (가로선 아래)
-//                  활성 스페이스의 일반 탭은 실제 창이 원본이고, tabs 배열은 비활성 스페이스용 저장소.
+//                  활성 스페이스의 일반 탭은 실제 창이 원본이고, tabs 배열에는 그 사본을 계속 저장해 둔다
+//                  (창을 닫거나 크롬을 꺼도 남도록). 비활성 스페이스는 tabs 배열이 원본.
 //   activeSpaceId: string
 //   archive:       [{ id, url, title, spaceId, spaceName, closedAt }]
 //   settings:      { archiveHours }   0 이면 자동 정리 끔
 // chrome.storage.session
 //   overrides:     { [tabId]: lastAccessed }  스페이스 전환으로 다시 연 탭의 "원래" 마지막 접근 시각
 //   lazy:          { [tabId]: { url, title } } 전환 때 자리표시로 열어 둔 탭의 원래 주소·제목
+//   spaceWindow:   windowId  활성 스페이스가 떠 있는 창 (이 창의 일반 탭을 활성 스페이스 tabs 에 저장)
 //
 // 즐겨찾기(favorites, pins)는 탭을 닫아도 항목이 남고, 자동 정리 대상이 아니다.
 
@@ -146,13 +148,35 @@ async function reattach({ reset }) {
 chrome.runtime.onInstalled.addListener(() => {
   serial(init);
   serial(() => reattach({ reset: false }));
+  chrome.windows.getLastFocused({ windowTypes: ['normal'] }).then((w) => scheduleAdopt(w.id, 0), () => {});
 });
 chrome.runtime.onStartup.addListener(() => {
   serial(init);
   serial(() => reattach({ reset: true }));
   // 세션 복원이 늦게 끝나는 경우를 위해 한 번 더
   setTimeout(() => serial(() => reattach({ reset: false })), 5000);
+  // 크롬이 세션 복원을 끝낼 때까지 기다렸다가 첫 창에 활성 스페이스를 맡긴다
+  startupUntil = Date.now() + 60_000;
+  waitRestored().then(async () => {
+    startupUntil = 0;
+    const w = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null);
+    if (w) serial(() => adoptWindow(w.id, { startup: true }));
+  });
 });
+
+// 시작 직후에는 창·탭 수가 3초 동안 그대로일 때까지 기다린다 (최대 30초)
+let startupUntil = 0;
+async function waitRestored() {
+  const count = async () => (await chrome.tabs.query({ windowType: 'normal' })).length;
+  let last = -1, stableSince = Date.now();
+  const start = Date.now();
+  while (Date.now() - start < 30_000) {
+    const n = await count();
+    if (n !== last) { last = n; stableSince = Date.now(); }
+    else if (n > 0 && Date.now() - stableSince >= 3000) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
 
 // ---------- 스페이스 전환 ----------
 // 전환 중에는 옛 탭과 새 탭이 잠깐 같이 있다. 사이드패널이 그 중간 상태를 그리지 않도록 표시해 둔다.
@@ -192,7 +216,12 @@ async function doSwitch(st, target, targetId, windowId) {
       }
     }
     for (const p of current.pins) delete p.tabId;
-    current.tabs = regular;
+    // 다른 창(활성 스페이스가 없는 창)에서 바꿨다면 저장본을 덮어쓰지 않고 이 창의 탭을 더한다
+    if ((await getSpaceWindow()) === windowId) current.tabs = regular;
+    else {
+      const have = new Set(current.tabs.map((t) => t.url));
+      current.tabs = [...current.tabs.map((t) => ({ ...t, active: false })), ...regular.filter((t) => !have.has(t.url))];
+    }
   }
 
   // 2) 대상 스페이스 열기: 열려 있던 즐겨찾기 → 일반 탭 순서 (창이 닫히지 않도록 먼저 연다)
@@ -201,16 +230,33 @@ async function doSwitch(st, target, targetId, windowId) {
     ...target.tabs,
   ];
   if (!toOpen.length) toOpen.push({ url: 'chrome://newtab/', active: true });
-  let activeIdx = toOpen.findIndex((t) => t.active);
-  if (activeIdx < 0) activeIdx = toOpen.length - 1;
   for (const t of live) { delete overrides[t.id]; delete lazy[t.id]; }
+  const splitPairs = await openSaved(windowId, toOpen, all.length, overrides, lazy);
+  for (const p of target.pins) { delete p.wasOpen; delete p.wasActive; }
+  // 대상 스페이스의 tabs 는 그대로 둔다: 지금 연 탭과 같은 내용이고, 이후 저장(snapshot)이 갱신한다
+
+  await chrome.storage.local.set({ spaces: st.spaces, activeSpaceId: targetId });
+  await setOverrides(overrides);
+  await setLazy(lazy);
+  await setSpaceWindow(windowId);
+
+  // 3) 이전 스페이스 탭 닫기
+  if (live.length) await chrome.tabs.remove(live.map((t) => t.id)).catch(() => {});
+
+  // 4) 분할 화면 복원
+  await restoreSplits(splitPairs);
+}
+
+// 저장된 탭 목록을 창에 연다. 지금 볼 탭(active)만 바로 로드하고, 나머지는 자리표시로 열어 두었다가 클릭할 때 로드.
+// overrides·lazy 는 호출한 쪽에서 저장한다. 반환: 분할 화면으로 다시 묶을 탭 ID 쌍
+async function openSaved(windowId, items, base, overrides, lazy) {
+  let activeIdx = items.findIndex((t) => t.active);
+  if (activeIdx < 0) activeIdx = items.length - 1;
   const splitPairs = new Map();  // 저장된 split 값 → 새로 만든 탭 ID 들
   // 탭은 한꺼번에 연다 (하나씩 기다리면 탭 수만큼 느려진다). 순서는 index 로 고정.
-  const base = all.length;
-  const createdTabs = await Promise.all(toOpen.map(async (item, i) => {
+  const createdTabs = await Promise.all(items.map(async (item, i) => {
     const active = i === activeIdx;
     const index = base + i;
-    // 지금 볼 탭만 바로 로드하고, 나머지는 자리표시로 열어 두었다가 클릭할 때 로드
     let created = null;
     if (!active && canLazy(item.url)) {
       created = await chrome.tabs.create({ windowId, index, url: lazyPageUrl(item.url, item.title), active: false })
@@ -218,8 +264,8 @@ async function doSwitch(st, target, targetId, windowId) {
     }
     return created ?? chrome.tabs.create({ windowId, index, url: item.url, active });
   }));
-  for (let i = 0; i < toOpen.length; i++) {
-    const item = toOpen[i];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
     const active = i === activeIdx;
     const created = createdTabs[i];
     if (item.pin) item.pin.tabId = created.id;
@@ -231,22 +277,115 @@ async function doSwitch(st, target, targetId, windowId) {
       splitPairs.get(item.split).push(created.id);
     }
   }
-  for (const p of target.pins) { delete p.wasOpen; delete p.wasActive; }
-  target.tabs = [];
+  return splitPairs;
+}
 
-  await chrome.storage.local.set({ spaces: st.spaces, activeSpaceId: targetId });
-  await setOverrides(overrides);
-  await setLazy(lazy);
-
-  // 3) 이전 스페이스 탭 닫기
-  if (live.length) await chrome.tabs.remove(live.map((t) => t.id)).catch(() => {});
-
-  // 4) 분할 화면 복원 (Chrome 155+)
-  if (typeof chrome.tabs.createSplit === 'function') {
-    for (const ids of splitPairs.values()) {
-      if (ids.length === 2) await chrome.tabs.createSplit(ids).catch((e) => console.warn('[spaces] split restore', e));
-    }
+async function restoreSplits(splitPairs) {
+  if (typeof chrome.tabs.createSplit !== 'function') return;
+  for (const ids of splitPairs.values()) {
+    if (ids.length === 2) await chrome.tabs.createSplit(ids).catch((e) => console.warn('[spaces] split restore', e));
   }
+}
+
+// ---------- 활성 스페이스 탭 계속 저장 ----------
+// 활성 스페이스가 떠 있는 창(spaceWindow)의 일반 탭을 활성 스페이스 tabs 에 계속 복사해 둔다.
+// 창을 닫으면 마지막 저장본이 남고, 다음에 창을 열면(또는 크롬을 다시 켜면) 빠진 탭을 다시 연다.
+async function getSpaceWindow() {
+  const { spaceWindow } = await chrome.storage.session.get('spaceWindow');
+  if (spaceWindow == null) return null;
+  try {
+    const w = await chrome.windows.get(spaceWindow);
+    return w.type === 'normal' ? w.id : null;
+  } catch { return null; }
+}
+const setSpaceWindow = (id) => chrome.storage.session.set({ spaceWindow: id });
+
+// 창의 일반 탭 → 저장 형식 (공통 즐겨찾기·크롬 고정 탭·스페이스 즐겨찾기 탭·빈 탭 제외)
+function regularOf(st, tabs, overrides, lazy) {
+  const keep = pinnedTabIds(st);
+  return tabs
+    .filter((t) => !t.pinned && !keep.has(t.id))
+    .map((t) => toSaved(t, overrides[t.id], lazy[t.id]))
+    .filter((t) => !isBlank(t.url));
+}
+
+async function snapshot() {
+  const windowId = await getSpaceWindow();
+  if (windowId == null) return;
+  const { switching } = await chrome.storage.session.get('switching');
+  if (switching) return;
+  const st = await getState();
+  const sp = activeOf(st);
+  if (!sp) return;
+  const tabs = await chrome.tabs.query({ windowId });
+  const regular = regularOf(st, tabs, await getOverrides(), await getLazy());
+  if (JSON.stringify(regular) === JSON.stringify(sp.tabs)) return;
+  sp.tabs = regular;
+  await chrome.storage.local.set({ spaces: st.spaces });
+}
+let snapTimer = null;
+function scheduleSnapshot() {
+  clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => serial(snapshot), 800);
+}
+
+// 활성 스페이스를 띄운 창이 없으면 이 창을 맡긴다. 저장본 중 어느 창에도 없는 탭은 이 창에 다시 연다.
+// (크롬이 세션을 복원했다면 탭이 이미 있으니 아무것도 열지 않는다)
+async function adoptWindow(windowId, { startup = false } = {}) {
+  if ((await getSpaceWindow()) != null) return;
+  let win;
+  try { win = await chrome.windows.get(windowId, { populate: true }); } catch { return; }
+  if (win.type !== 'normal' || win.incognito) return;
+  const st = await getState();
+  const sp = activeOf(st);
+  await setSpaceWindow(windowId);
+  if (!sp?.tabs.length) return scheduleSnapshot();
+
+  const allTabs = await chrome.tabs.query({ windowType: 'normal' });
+  // 크롬을 막 켰는데 일반 탭이 이미 있으면 크롬이 세션을 복원한 것 → 다시 열지 않는다
+  if (startup && allTabs.some((t) => !t.pinned && !isBlank(tabUrl(t)))) return scheduleSnapshot();
+  const open = new Set(allTabs.map(tabUrl));
+  const missing = sp.tabs.filter((t) => !open.has(t.url));
+  if (missing.length) {
+    const overrides = await getOverrides();
+    const lazy = await getLazy();
+    // 새 창의 빈 새 탭 하나만 있으면 저장본으로 바꿔 끼운다
+    const blanks = win.tabs.filter((t) => !t.pinned && isBlank(tabUrl(t)));
+    const onlyBlank = blanks.length && win.tabs.every((t) => t.pinned || isBlank(tabUrl(t)));
+    const items = missing.map((t) => ({ ...t, active: onlyBlank ? t.active : false }));
+    if (!onlyBlank) items.forEach((t) => { if (!t.lastAccessed) t.lastAccessed = Date.now(); });
+    const splitPairs = await openSavedKeepFocus(windowId, items, win.tabs.length, overrides, lazy, !!onlyBlank);
+    await setOverrides(overrides);
+    await setLazy(lazy);
+    if (onlyBlank) await chrome.tabs.remove(blanks.map((t) => t.id)).catch(() => {});
+    await restoreSplits(splitPairs);
+  }
+  scheduleSnapshot();
+}
+// 창에 이미 보던 탭이 있으면 그 탭을 그대로 보게 둔다 (복원한 탭은 모두 자리표시로)
+async function openSavedKeepFocus(windowId, items, base, overrides, lazy, mayActivate) {
+  if (mayActivate) return openSaved(windowId, items, base, overrides, lazy);
+  const pairs = new Map();
+  const created = await Promise.all(items.map((item, i) => chrome.tabs.create({
+    windowId, index: base + i, active: false,
+    url: canLazy(item.url) ? lazyPageUrl(item.url, item.title) : item.url,
+  })));
+  items.forEach((item, i) => {
+    const id = created[i].id;
+    if (item.lastAccessed) overrides[id] = item.lastAccessed;
+    if (canLazy(item.url)) lazy[id] = { url: item.url, title: item.title || '' };
+    if (item.split != null) {
+      if (!pairs.has(item.split)) pairs.set(item.split, []);
+      pairs.get(item.split).push(id);
+    }
+  });
+  return pairs;
+}
+// 창이 막 열렸을 때는 크롬이 세션 탭을 아직 복원 중일 수 있어 잠시 기다린다
+function scheduleAdopt(windowId, delay = 1500) {
+  if (windowId == null || windowId === chrome.windows.WINDOW_ID_NONE) return;
+  if (Date.now() < startupUntil) return;  // 시작 중에는 waitRestored 가 끝난 뒤 한 번만
+  setTimeout(() => serial(() => adoptWindow(windowId)), delay);
 }
 
 async function createSpace({ space, windowId }) {
@@ -539,6 +678,23 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
     if (f) { delete f.tabId; await chrome.storage.local.set({ favorites: st.favorites }); }
   });
 });
+
+// 활성 스페이스 탭 저장: 탭이 바뀔 때마다 (잠깐 모았다가) 저장. 창을 닫느라 닫힌 탭은 저장본에서 빼지 않는다.
+chrome.tabs.onCreated.addListener(scheduleSnapshot);
+chrome.tabs.onRemoved.addListener((_id, info) => { if (!info.isWindowClosing) scheduleSnapshot(); });
+chrome.tabs.onUpdated.addListener((_id, info) => {
+  if (info.url || info.title || 'pinned' in info || info.splitViewId !== undefined) scheduleSnapshot();
+});
+for (const ev of ['onMoved', 'onActivated', 'onAttached', 'onDetached', 'onReplaced']) chrome.tabs[ev].addListener(scheduleSnapshot);
+// 활성 스페이스 창이 닫힌 뒤 다른 창을 쓰거나 새 창을 열면 그 창이 이어받는다
+chrome.windows.onCreated.addListener((w) => { if (w.type === 'normal') scheduleAdopt(w.id); });
+chrome.windows.onFocusChanged.addListener((id) => scheduleAdopt(id, 300));
+chrome.windows.onRemoved.addListener((id) =>
+  serial(async () => {
+    const { spaceWindow } = await chrome.storage.session.get('spaceWindow');
+    if (spaceWindow === id) await setSpaceWindow(null);
+  })
+);
 
 // ---------- 단축키 ----------
 // 사이드패널이 열린 창 추적: 패널이 열리면 포트를 연결하고, 닫히면 끊긴다.
