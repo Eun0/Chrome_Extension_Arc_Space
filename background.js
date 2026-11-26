@@ -488,14 +488,33 @@ async function addPin({ kind, tabId, toIndex }) {
   if (kind === 'pin' && tab.pinned) await chrome.tabs.update(tabId, { pinned: false });
 }
 
+// 즐겨찾기 탭을 누른 창에서 보여 준다. 다른 창에 있으면 그 탭을 이 창으로 옮겨 온다 (탭은 하나뿐).
+async function showHere(tab, windowId, kind) {
+  if (tab.windowId !== windowId) {
+    try {
+      // 옮기면 원래 창에 탭이 하나도 안 남는 경우, 창이 닫히지 않게 빈 탭을 먼저 연다
+      const rest = (await chrome.tabs.query({ windowId: tab.windowId })).filter((t) => t.id !== tab.id);
+      if (!rest.length) await chrome.tabs.create({ windowId: tab.windowId, active: false });
+      await chrome.tabs.move(tab.id, { windowId, index: -1 });
+      // 창을 옮기면 고정이 풀릴 수 있다
+      if (kind === 'fav') await chrome.tabs.update(tab.id, { pinned: true });
+    } catch (e) {
+      // 옮길 수 없는 창(시크릿 등)이면 그 창을 앞으로
+      console.warn('[spaces] move pin tab', e);
+      await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    }
+  }
+  await chrome.tabs.update(tab.id, { active: true });
+}
+
 async function openPin({ kind, pinId, windowId }) {
   const st = await getState();
   const p = pinList(st, kind).find((x) => x.id === pinId);
   if (!p) return;
+  windowId = await resolveWindow(windowId);
   if (p.tabId != null) {
     try {
-      await chrome.tabs.get(p.tabId);
-      await chrome.tabs.update(p.tabId, { active: true });
+      await showHere(await chrome.tabs.get(p.tabId), windowId, kind);
       return;
     } catch { delete p.tabId; }
   }
@@ -503,18 +522,18 @@ async function openPin({ kind, pinId, windowId }) {
   const host = (u) => { try { return new URL(u).host; } catch { return ''; } };
   const used = pinnedTabIds(st);
   const cands = (await chrome.tabs.query({ windowType: 'normal' }))
-    .filter((t) => !used.has(t.id) && t.pinned === (kind === 'fav'));
+    .filter((t) => !used.has(t.id) && t.pinned === (kind === 'fav'))
+    .sort((a, b) => (b.windowId === windowId) - (a.windowId === windowId));  // 누른 창의 탭 먼저
   const found = cands.find((t) => tabUrl(t) === p.url)
     || (kind === 'fav' && host(p.url) && cands.find((t) => host(tabUrl(t)) === host(p.url)));
   if (found) {
     p.tabId = found.id;
     await chrome.storage.local.set({ favorites: st.favorites, spaces: st.spaces });
-    await chrome.windows.update(found.windowId, { focused: true }).catch(() => {});
-    await chrome.tabs.update(found.id, { active: true });
+    await showHere(found, windowId, kind);
     return;
   }
   const t = await chrome.tabs.create({
-    windowId: await resolveWindow(windowId), url: p.url, active: true, pinned: kind === 'fav',
+    windowId, url: p.url, active: true, pinned: kind === 'fav',
   });
   p.tabId = t.id;
   await chrome.storage.local.set({ favorites: st.favorites, spaces: st.spaces });
@@ -703,6 +722,9 @@ chrome.tabs.onReplaced.addListener((added, removed) =>
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.pinned !== false) return;
   serial(async () => {
+    // 창을 옮기느라 잠깐 풀렸다가 다시 고정된 탭은 그대로 둔다
+    const t = await chrome.tabs.get(tabId).catch(() => null);
+    if (t?.pinned) return;
     const st = await getState();
     const f = st.favorites.find((p) => p.tabId === tabId);
     if (f) { delete f.tabId; await chrome.storage.local.set({ favorites: st.favorites }); }
